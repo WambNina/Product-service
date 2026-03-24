@@ -1,92 +1,124 @@
-const { sequelize, Sequelize } = require('../config/database');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
 const ProductImage = sequelize.define('ProductImage', {
   id: {
-    type: Sequelize.UUID,
-    defaultValue: Sequelize.UUIDV4,
-    primaryKey: true
+    type: DataTypes.CHAR(36),
+    primaryKey: true,
+    defaultValue: DataTypes.UUIDV4
   },
   product_id: {
-    type: Sequelize.UUID,
+    type: DataTypes.CHAR(36),
     allowNull: false
   },
   variant_id: {
-    type: Sequelize.UUID,
+    type: DataTypes.CHAR(36),
     allowNull: true
   },
   filename: {
-    type: Sequelize.STRING(255),
+    type: DataTypes.STRING(255),
     allowNull: false
   },
   original_filename: {
-    type: Sequelize.STRING(255),
+    type: DataTypes.STRING(255),
     allowNull: false
   },
   mime_type: {
-    type: Sequelize.STRING(50),
+    type: DataTypes.STRING(50),
     allowNull: false
   },
   size_bytes: {
-    type: Sequelize.INTEGER,
+    type: DataTypes.INTEGER,
     allowNull: false
   },
   url: {
-    type: Sequelize.STRING(500),
+    type: DataTypes.STRING(500),
     allowNull: false
   },
   thumbnail_url: {
-    type: Sequelize.STRING(500),
+    type: DataTypes.STRING(500),
     allowNull: true
   },
   medium_url: {
-    type: Sequelize.STRING(500),
+    type: DataTypes.STRING(500),
     allowNull: true
   },
   large_url: {
-    type: Sequelize.STRING(500),
+    type: DataTypes.STRING(500),
     allowNull: true
   },
   width: {
-    type: Sequelize.INTEGER,
+    type: DataTypes.INTEGER,
     allowNull: true
   },
   height: {
-    type: Sequelize.INTEGER,
+    type: DataTypes.INTEGER,
     allowNull: true
   },
   alt_text: {
-    type: Sequelize.STRING(255),
+    type: DataTypes.STRING(255),
     allowNull: true
   },
   caption: {
-    type: Sequelize.STRING(500),
+    type: DataTypes.STRING(500),
     allowNull: true
   },
   position: {
-    type: Sequelize.INTEGER,
+    type: DataTypes.INTEGER,
     defaultValue: 0
   },
   is_primary: {
-    type: Sequelize.BOOLEAN,
+    type: DataTypes.BOOLEAN,
     defaultValue: false
   },
   source: {
-    type: Sequelize.ENUM('upload', 'whatsapp', 'url', 'api'),
+    type: DataTypes.ENUM('upload', 'whatsapp', 'url', 'api'),
     defaultValue: 'upload'
   },
   whatsapp_media_id: {
-    type: Sequelize.STRING(100),
+    type: DataTypes.STRING(100),
     allowNull: true
   },
   metadata: {
-    type: Sequelize.JSON,
-    defaultValue: {}
+    type: DataTypes.JSON,
+    allowNull: true
+  },
+  created_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  },
+  updated_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   }
 }, {
   tableName: 'product_images',
   timestamps: true,
   createdAt: 'created_at',
-  updatedAt: 'updated_at'
+  updatedAt: 'updated_at',
+  indexes: [
+    { fields: ['product_id'], name: 'idx_product_id' },
+    { fields: ['variant_id'], name: 'idx_variant_id' },
+    { fields: ['is_primary'], name: 'idx_is_primary' }
+  ]
 });
+
+// Associations
+ProductImage.associate = (models) => {
+  ProductImage.belongsTo(models.Product, {
+    foreignKey: 'product_id',
+    as: 'product',
+    onDelete: 'CASCADE'
+  });
+  ProductImage.belongsTo(models.ProductVariant, {
+    foreignKey: 'variant_id',
+    as: 'variant',
+    onDelete: 'SET NULL'
+  });
+  ProductImage.hasMany(models.ProductVariant, {
+    foreignKey: 'image_id',
+    as: 'variantsUsingThisImage'
+  });
+};
 
 module.exports = ProductImage;

@@ -118,7 +118,8 @@ class DiscoveryService {
 
     const products = await Product.findAll({
       where: whereClause,
-      attributes: ['id', 'name', 'slug', 'price', 'compare_at_price', 'images', 'short_description'],
+      attributes: ['id', 'name', 'slug', 'price', 'compare_at_price', 'short_description', 'category_id',
+    'created_at', 'updated_at'],
       include: [
         { 
           model: Category, 

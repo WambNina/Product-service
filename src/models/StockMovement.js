@@ -4,57 +4,82 @@ const { sequelize } = require('../config/database');
 const StockMovement = sequelize.define('StockMovement', {
   id: {
     type: DataTypes.INTEGER,
-    primaryKey: true,
-    autoIncrement: true
+    autoIncrement: true,
+    primaryKey: true
   },
-  productId: {
-    type: DataTypes.STRING(255),
+  product_id: {
+    type: DataTypes.CHAR(36),
     allowNull: false,
-    field: 'product_id'
+    references: {
+      model: 'products',
+      key: 'id'
+    }
   },
-  variantId: {
-    type: DataTypes.STRING(255),
+  variant_id: {
+    type: DataTypes.CHAR(36),
     allowNull: true,
-    field: 'variant_id'
+    references: {
+      model: 'product_variants',
+      key: 'id'
+    }
   },
-  movementType: {
+  movement_type: {
     type: DataTypes.ENUM('increase', 'decrease', 'adjustment', 'initial'),
-    allowNull: false,
-    field: 'movement_type'
+    allowNull: false
   },
   quantity: {
     type: DataTypes.INTEGER,
     allowNull: false
   },
-  previousStock: {
+  previous_stock: {
     type: DataTypes.INTEGER,
-    allowNull: false,
-    field: 'previous_stock'
+    allowNull: false
   },
-  newStock: {
+  new_stock: {
     type: DataTypes.INTEGER,
-    allowNull: false,
-    field: 'new_stock'
+    allowNull: false
   },
   reason: {
     type: DataTypes.STRING(255),
     allowNull: true
   },
-  referenceId: {
+  reference_id: {
     type: DataTypes.STRING(100),
-    allowNull: true,
-    field: 'reference_id'
+    allowNull: true
   },
-  createdBy: {
+  created_by: {
     type: DataTypes.STRING(255),
-    allowNull: true,
-    field: 'created_by'
+    allowNull: true
+  },
+  created_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   }
 }, {
   tableName: 'stock_movements',
   timestamps: true,
   createdAt: 'created_at',
-  updatedAt: false
+  updatedAt: false, // No updated_at in SQL schema
+  indexes: [
+    {
+      fields: ['product_id', 'created_at'],
+      name: 'idx_product_movements'
+    }
+  ]
 });
+
+// Associations
+StockMovement.associate = (models) => {
+  StockMovement.belongsTo(models.Product, {
+    foreignKey: 'product_id',
+    as: 'product',
+    onDelete: 'CASCADE'
+  });
+  StockMovement.belongsTo(models.ProductVariant, {
+    foreignKey: 'variant_id',
+    as: 'variant',
+    onDelete: 'CASCADE'
+  });
+};
 
 module.exports = StockMovement;

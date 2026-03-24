@@ -5,14 +5,8 @@
     "version": "1.0.0",
     "description": "Product microservice"
   },
-  "servers": [
-    {
-      "url": "http://localhost:3002/api/v1",
-      "description": "Base URL"
-    }
-  ],
   "paths": {
-    "/products": {
+    "/api/v1/products": {
       "get": {
         "summary": "Get all products",
         "tags": ["Products"],
@@ -97,7 +91,7 @@
         }
       }
     },
-    "/products/search": {
+    "/api/v1/products/search": {
       "get": {
         "summary": "Search products",
         "tags": ["Products", "Search"],
@@ -194,7 +188,7 @@
         }
       }
     },
-    "/products/filter": {
+    "/api/v1/products/filter": {
       "get": {
         "summary": "Filter products",
         "tags": ["Products", "Search"],
@@ -315,7 +309,7 @@
         }
       }
     },
-    "/products/featured": {
+    "/api/v1/products/featured": {
       "get": {
         "summary": "Get featured products",
         "tags": ["Products", "Discovery"],
@@ -355,7 +349,7 @@
         }
       }
     },
-    "/products/{id}": {
+    "/api/v1/products/{id}": {
       "get": {
         "summary": "Get product by ID",
         "tags": ["Products"],
@@ -418,7 +412,7 @@
         }
       }
     },
-       "/products/{id}/variants": {
+    "/api/v1/products/{id}/variants": {
       "get": {
         "summary": "Get product variants",
         "tags": ["Variants"],
@@ -495,7 +489,119 @@
         }
       }
     },
-    "/products/{variantId}": {
+    "/api/v1/products/{id}/variants/batch": {
+      "post": {
+        "tags": ["Variants"],
+        "summary": "Upload product image and create multiple variants",
+        "description": "Upload product image and configure color/size/weight variants in batch",
+        "operationId": "uploadProductImageAndCreateVariants",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product ID",
+            "schema": {
+              "type": "string",
+              "example": "1a2ace3d-f1ba-4779-8aac-e336360faf12"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["image", "colors", "sizes"],
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Product image file (jpg, png, webp)"
+                  },
+                  "colors": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": ["#000000", "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FFFFFF", "#0000FF"]
+                    },
+                    "description": "Selected colors (checkbox array)"
+                  },
+                  "sizes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": ["XS", "S", "M", "L", "XL", "XXL", "One Size"]
+                    },
+                    "description": "Selected sizes (checkbox array)"
+                  },
+                  "weight": {
+                    "type": "number",
+                    "default": 0,
+                    "description": "Product weight in kg"
+                  },
+                  "price": {
+                    "type": "decimal",
+                    "default": 0,
+                    "description": "set price"
+                  },
+                  "is_default": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Set as default product image"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Image uploaded and variants created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "product_id": { "type": "string" },
+                        "image_url": { "type": "string" },
+                        "filename": { "type": "string" },
+                        "variants_created": { "type": "number" },
+                        "variants": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": { "type": "string" },
+                              "sku": { "type": "string" },
+                              "color": { "type": "string" },
+                              "size": { "type": "string" },
+                              "weight": { "type": "number" },
+                              "price": { "type": "decimal"},
+                              "is_default": { "type": "boolean" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error" },
+          "404": { "description": "Product not found" }
+        }
+      }
+    },
+    "/api/v1/products/{variantId}": {
       "put": {
         "summary": "Update variant",
         "tags": ["Variants"],
@@ -569,7 +675,7 @@
         }
       }
     },
-    "/products/{id}/reviews": {
+    "/api/v1/products/{id}/reviews": {
       "get": {
         "summary": "Get product reviews",
         "tags": ["Reviews", "Discovery"],
@@ -645,7 +751,7 @@
         }
       }
     },
-    "/products/{id}/rating": {
+    "/api/v1/products/{id}/rating": {
       "get": {
         "summary": "Get product rating summary",
         "tags": ["Reviews", "Discovery"],
@@ -694,7 +800,7 @@
         }
       }
     },
-    "/products/{id}/related": {
+    "/api/v1/products/{id}/related": {
       "get": {
         "summary": "Get related products",
         "tags": ["Discovery"],
@@ -735,11 +841,10 @@
         }
       }
     },
-    "/categories": {
+    "/api/v1/categories": {
       "get": {
         "summary": "Category List",
         "tags": ["Categories"],
-
         "responses": {
           "200": { "description": "Succès" }
         }
@@ -771,7 +876,7 @@
         }
       }
     },
-    "/categories/{id}": {
+    "/api/v1/categories/{id}": {
       "get": {
         "summary": "Detail of a category",
         "tags": ["Categories"],
@@ -835,7 +940,7 @@
         }
       }
     },
-     "/merchants/{merchantId}/products": {
+    "/api/v1/merchants/{merchantId}/products": {
       "get": {
         "summary": "Get merchant products",
         "tags": ["Merchants"],
@@ -950,7 +1055,7 @@
         }
       }
     },
-    "/stores/{storeId}/products": {
+    "/api/v1/stores/{storeId}/products": {
       "get": {
         "summary": "Get store products",
         "tags": ["Stores"],
@@ -1016,10 +1121,11 @@
         }
       }
     },
-    "/products/{id}/images": {
+    "/api/v1/products/{id}/images": {
       "post": {
         "tags": ["Images"],
         "summary": "Upload product Image",
+        "security": [{ "bearerAuth": [] }],
         "parameters": [
           {
             "name": "id",
@@ -1035,15 +1141,18 @@
                 "type": "object",
                 "properties": {
                   "images": {
-                    "type": "string",
-                    "format": "array"
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
                   },
                   "is_main": {
                     "type": "boolean",
                     "default": false
                   }
                 },
-                "required": ["file"]
+                "required": ["images"]
               }
             }
           }
@@ -1079,10 +1188,11 @@
         }
       }
     },
-    "/products/{id}/images/{imageId}": {
+    "/api/v1/products/{id}/images/{imageId}": {
       "delete": {
         "tags": ["Images"],
         "summary": "Delete an image",
+        "security": [{ "bearerAuth": [] }],
         "parameters": [
           {
             "name": "id",
@@ -1103,7 +1213,7 @@
         }
       }
     },
-    "/products/{id}/stock": {
+    "/api/v1/products/{id}/stock": {
       "get": {
         "summary": "Get product stock",
         "tags": ["Stock"],
@@ -1190,7 +1300,7 @@
         }
       }
     },
-    "/products/{id}/stock/increase": {
+    "/api/v1/products/{id}/stock/increase": {
       "post": {
         "summary": "Increase stock",
         "tags": ["Stock"],
@@ -1225,7 +1335,7 @@
         }
       }
     },
-    "/products/{id}/stock/decrease": {
+    "/api/v1/products/{id}/stock/decrease": {
       "post": {
         "summary": "Decrease stock",
         "tags": ["Stock"],
@@ -1263,7 +1373,7 @@
       }
     }
   },
-   "components": {
+  "components": {
     "schemas": {
       "Product": {
         "type": "object",

@@ -3,12 +3,12 @@ const { sequelize } = require('../config/database');
 
 const ProductVariant = sequelize.define('ProductVariant', {
   id: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.CHAR(36),
     primaryKey: true,
-    autoIncrement: true
+    defaultValue: DataTypes.UUIDV4
   },
   product_id: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.CHAR(36),
     allowNull: false,
     references: {
       model: 'products',
@@ -20,16 +20,43 @@ const ProductVariant = sequelize.define('ProductVariant', {
     allowNull: false,
     unique: true
   },
-  
+  barcode: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
+  attributes: {
+    type: DataTypes.JSON,
+    allowNull: false
+  },
+  color: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  size: {
+    type: DataTypes.STRING(20),
+    allowNull: true
+  },
+  material: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  pattern: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  price_adjustment: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00
+  },
+  final_price: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true
+  },
   price: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: true
   },
   compare_at_price: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: true
-  },
-  cost_price: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: true
   },
@@ -41,34 +68,25 @@ const ProductVariant = sequelize.define('ProductVariant', {
     type: DataTypes.DECIMAL(8, 2),
     allowNull: true
   },
-  weight_unit: {
-    type: DataTypes.STRING(10),
-    defaultValue: 'kg'
-  },
-  barcode: {
-    type: DataTypes.STRING(100),
-    allowNull: true
-  },
-  image_url: {
-    type: DataTypes.STRING(500),
-    allowNull: true
-  },
-  position: {
-    type: DataTypes.INTEGER,
-    defaultValue: 0
+  image_id: {
+    type: DataTypes.CHAR(36),
+    allowNull: true,
+    references: {
+      model: 'product_images',
+      key: 'id'
+    }
   },
   is_default: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
   },
-  is_active: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: true
+  status: {
+    type: DataTypes.ENUM('active', 'out_of_stock', 'discontinued'),
+    defaultValue: 'active'
   },
-  options: {
-    type: DataTypes.JSON,
-    allowNull: true,
-    comment: 'Store variant options like {color: "red", size: "XL"}'
+  position: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
   },
   created_at: {
     type: DataTypes.DATE,
@@ -82,7 +100,33 @@ const ProductVariant = sequelize.define('ProductVariant', {
   tableName: 'product_variants',
   timestamps: true,
   createdAt: 'created_at',
-  updatedAt: 'updated_at'
+  updatedAt: 'updated_at',
+  indexes: [
+    { fields: ['product_id', 'status'], name: 'idx_product_id_status' },
+    { fields: ['color', 'size'], name: 'idx_color_size' },
+    { fields: ['sku'], unique: true, name: 'idx_sku' }
+  ]
 });
+
+ProductVariant.associate = (models) => {
+  ProductVariant.belongsTo(models.Product, {
+    foreignKey: 'product_id',
+    as: 'product',
+    onDelete: 'CASCADE'
+  });
+  ProductVariant.belongsTo(models.ProductImage, {
+    foreignKey: 'image_id',
+    as: 'image',
+    onDelete: 'SET NULL'
+  });
+  ProductVariant.hasMany(models.ProductStock, {
+    foreignKey: 'variant_id',
+    as: 'stocks'
+  });
+  ProductVariant.hasMany(models.StockMovement, {
+    foreignKey: 'variant_id',
+    as: 'stockMovements'
+  });
+};
 
 module.exports = ProductVariant;

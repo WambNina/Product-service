@@ -1,25 +1,23 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 
-const Stock = sequelize.define('Stock', {
+const ProductStock = sequelize.define('ProductStock', {
   id: {
     type: DataTypes.INTEGER,
-    primaryKey: true,
-    autoIncrement: true
+    autoIncrement: true,
+    primaryKey: true
   },
-  productId: {
-    type: DataTypes.STRING(255),
+  product_id: {
+    type: DataTypes.CHAR(36),
     allowNull: false,
-    field: 'product_id',
     references: {
       model: 'products',
       key: 'id'
     }
   },
-  variantId: {
-    type: DataTypes.STRING(255),
+  variant_id: {
+    type: DataTypes.CHAR(36),
     allowNull: true,
-    field: 'variant_id',
     references: {
       model: 'product_variants',
       key: 'id'
@@ -28,27 +26,28 @@ const Stock = sequelize.define('Stock', {
   quantity: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    defaultValue: 0,
-    validate: {
-      min: 0
-    }
+    defaultValue: 0
   },
-  reservedQuantity: {
+  reserved_quantity: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    defaultValue: 0,
-    field: 'reserved_quantity'
+    defaultValue: 0
   },
-  alertThreshold: {
+  alert_threshold: {
     type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 10,
-    field: 'alert_threshold'
+    defaultValue: 10
   },
-  lastMovementAt: {
+  last_movement_at: {
     type: DataTypes.DATE,
-    allowNull: true,
-    field: 'last_movement_at'
+    allowNull: true
+  },
+  created_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  },
+  updated_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   }
 }, {
   tableName: 'product_stocks',
@@ -58,19 +57,24 @@ const Stock = sequelize.define('Stock', {
   indexes: [
     {
       unique: true,
-      fields: ['product_id', 'variant_id']
+      fields: ['product_id', 'variant_id'],
+      name: 'unique_product_variant'
     }
   ]
 });
 
-// Virtual field for available stock
-Stock.prototype.getAvailableStock = function() {
-  return this.quantity - this.reservedQuantity;
+// Associations
+ProductStock.associate = (models) => {
+  ProductStock.belongsTo(models.Product, {
+    foreignKey: 'product_id',
+    as: 'product',
+    onDelete: 'CASCADE'
+  });
+  ProductStock.belongsTo(models.ProductVariant, {
+    foreignKey: 'variant_id',
+    as: 'variant',
+    onDelete: 'CASCADE'
+  });
 };
 
-// Check if stock is low
-Stock.prototype.isLowStock = function() {
-  return this.getAvailableStock() <= this.alertThreshold;
-};
-
-module.exports = Stock;
+module.exports = ProductStock;

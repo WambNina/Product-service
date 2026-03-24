@@ -50,11 +50,22 @@ router.delete('/:id', productController.deleteProduct);
 
 // GESTION DES VARIANTES
 router.get('/:id/variants', variantController.getProductVariants);
+
+// ⭐ NEW: BATCH VARIANT CREATION WITH IMAGE UPLOAD (MUST BE BEFORE /:id/variants)
+// This route handles: POST /api/v1/products/:id/variants/batch
+router.post(
+  '/:id/variants/batch',
+  upload.single('image'), // Single image upload, field name must be 'image'
+  variantController.createBatchVariants
+);
+
+// Single variant creation (JSON only, no image)
 router.post('/:id/variants', variantController.createVariant);
+
 router.put('/:variantId', variantController.updateVariant);
 router.delete('/:variantId', variantController.deleteVariant);
 
-// GESTION DES IMAGES - Fixed to use single('image') to match OpenAPI spec
+// GESTION DES IMAGES
 router.post('/:id/images', upload.array('images', 5), imageController.uploadImage);
 router.get('/:id/images', imageController.getProductImages);
 router.delete('/:id/images/:imageId', imageController.deleteImage);

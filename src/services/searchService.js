@@ -65,7 +65,7 @@ class SearchService {
     // Sélection des champs
     const attributes = fields ? fields.split(',') : 
       ['id', 'name', 'slug', 'price', 'compare_at_price', 'quantity', 
-       'status', 'category_id', 'images', 'created_at', 'short_description'];
+       'status', 'category_id', 'created_at', 'short_description'];
 
     const { count, rows: products } = await Product.findAndCountAll({
       where: whereClause,
