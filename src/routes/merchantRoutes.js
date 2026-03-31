@@ -12,7 +12,7 @@ router.get('/stores/:storeId/products', merchantController.getStoreProducts);
 router.use(authenticate);
 router.post(
   '/:merchantId/products',
-  upload.array('images', 5),
+  upload.array('images', 300),
   merchantController.createMerchantProduct
 );
 

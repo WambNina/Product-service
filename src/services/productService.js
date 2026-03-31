@@ -2,6 +2,13 @@ const { Op } = require("sequelize");
 const { Category, Stock, StockMovement } = require('../models');
 const ApiError = require('../utils/apiError');
 const stockService = require('./stockService');
+const axios = require('axios');
+
+const SERVICES = {
+  STORE: process.env.STORE_SERVICE_URL || 'http://localhost:3000',
+  MEDIA: process.env.MEDIA_SERVICE_URL || 'http://localhost:4002',
+  AUTH: process.env.AUTH_SERVICE_URL || 'http://localhost:3001'
+};
 
 const {
   Product,
@@ -15,10 +22,182 @@ console.log("ProductVariant:", models.ProductVariant);
 console.log("ProductImage:", models.ProductImage);
 console.log("ProductAttribute:", models.ProductAttribute);
 
-const axios = require("axios");
-
 
 class ProductService {
+
+   /**
+   * Vérifier si un store existe via le Store Service
+   */
+  async validateStore(storeId, authToken) {
+    try {
+      const response = await axios.get(
+        `${SERVICES.STORE}/api/v1/stores/${storeId}`,
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+          timeout: 5000
+        }
+      );
+      return response.data.success ? response.data.data : null;
+    } catch (error) {
+      console.error('❌ Store Service Error:', error.message);
+      throw new Error('Store service unavailable');
+    }
+  }
+
+  /**
+   * Vérifier si un merchant existe via Auth Service
+   */
+  async validateMerchant(merchantId, authToken) {
+    try {
+      const response = await axios.get(
+        `${SERVICES.AUTH}/api/v1/auth/merchants/${merchantId}`,
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+          timeout: 5000
+        }
+      );
+      return response.data.success ? response.data.data : null;
+    } catch (error) {
+      console.error('❌ Auth Service Error:', error.message);
+      throw new Error('Auth service unavailable');
+    }
+  }
+
+  /**
+   * Créer un produit avec validation cross-service
+   */
+  async createProductWithValidation(productData, authToken) {
+    // 1. Valider le store
+    const store = await this.validateStore(productData.store_id, authToken);
+    if (!store) {
+      throw new Error('Store not found or inactive');
+    }
+
+    // 2. Valider le merchant
+    const merchant = await this.validateMerchant(productData.merchant_id, authToken);
+    if (!merchant) {
+      throw new Error('Merchant not found');
+    }
+
+    // 3. Vérifier que le merchant possède bien ce store
+    if (store.merchant_id !== productData.merchant_id) {
+      throw new Error('Store does not belong to this merchant');
+    }
+
+    // 4. Créer le produit
+    const product = await Product.create({
+      ...productData,
+      status: 'draft'
+    });
+
+    // 5. Notifier le Store Service (event-driven)
+    await this.notifyStoreService('PRODUCT_CREATED', {
+      product_id: product.id,
+      store_id: product.store_id,
+      merchant_id: product.merchant_id
+    });
+
+    return product;
+  }
+
+  /**
+   * Associer des médias à un produit via Media Service
+   */
+  async associateMedia(productId, mediaIds, authToken) {
+    try {
+      const response = await axios.post(
+        `${SERVICES.MEDIA}/api/v1/media/associate`,
+        {
+          entity_type: 'product',
+          entity_id: productId,
+          media_ids: mediaIds
+        },
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+          timeout: 10000
+        }
+      );
+      
+      // Mettre à jour le produit avec les URLs des médias
+      if (response.data.success) {
+        await Product.update(
+          { 
+            images: response.data.data.urls,
+            has_variants: true 
+          },
+          { where: { id: productId } }
+        );
+      }
+      
+      return response.data.data;
+    } catch (error) {
+      console.error('❌ Media Service Error:', error.message);
+      throw new Error('Failed to associate media');
+    }
+  }
+
+  /**
+   * Récupérer les médias d'un produit
+   */
+  async getProductMedia(productId, authToken) {
+    try {
+      const response = await axios.get(
+        `${SERVICES.MEDIA}/api/v1/media/product/${productId}`,
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+          timeout: 5000
+        }
+      );
+      return response.data.success ? response.data.data : [];
+    } catch (error) {
+      console.error('❌ Media Service Error:', error.message);
+      return []; // Retourne vide si service indisponible
+    }
+  }
+
+  /**
+   * Notifier un autre service (event-driven)
+   */
+  async notifyStoreService(event, data) {
+    try {
+      await axios.post(
+        `${SERVICES.STORE}/api/v1/internal/events`,
+        { event, data },
+        { timeout: 5000 }
+      );
+    } catch (error) {
+      console.error('❌ Failed to notify store service:', error.message);
+      // Ne pas bloquer si la notification échoue
+    }
+  }
+
+  /**
+   * Récupérer un produit enrichi avec données des autres services
+   */
+  async getEnrichedProduct(productId, authToken) {
+    const product = await Product.findByPk(productId, {
+      include: [{ model: ProductVariant, as: 'variants' }]
+    });
+
+    if (!product) return null;
+
+    // Récupérer les données du store en parallèle
+    const [storeData, mediaData] = await Promise.allSettled([
+      this.validateStore(product.store_id, authToken),
+      this.getProductMedia(productId, authToken)
+    ]);
+
+    return {
+      ...product.toJSON(),
+      store: storeData.status === 'fulfilled' ? storeData.value : null,
+      media: mediaData.status === 'fulfilled' ? mediaData.value : [],
+      _meta: {
+        store_loaded: storeData.status === 'fulfilled',
+        media_loaded: mediaData.status === 'fulfilled'
+      }
+    };
+  }
+  
   async checkProductLimit(merchantId) {
     const count = await Product.count({
       where: {

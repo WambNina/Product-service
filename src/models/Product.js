@@ -13,7 +13,7 @@ const Product = sequelize.define('Product', {
   },
   store_id: {
     type: DataTypes.CHAR(36),
-    allowNull: false
+    allowNull: true
   },
   category_id: {
     type: DataTypes.CHAR(36),
@@ -26,7 +26,7 @@ const Product = sequelize.define('Product', {
   slug: {
     type: DataTypes.STRING(255),
     unique: true,
-    allowNull: false
+    allowNull: true
   },
   description: {
     type: DataTypes.TEXT,
@@ -225,4 +225,38 @@ Product.associate = (models) => {
   });
 };
 
+module.exports = (sequelize, DataTypes) => {
+  const Product = sequelize.define('Product', {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true
+    },
+    name: DataTypes.STRING,
+    description: DataTypes.TEXT,
+    type: {
+      type: DataTypes.ENUM('simple', 'configurable', 'variant'),
+      defaultValue: 'simple'
+    },
+    parentId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'Products', key: 'id' }
+    },
+    basePrice: DataTypes.DECIMAL(10, 2),
+    sku: DataTypes.STRING,
+    // ... autres champs existants
+  });
+
+  Product.associate = (models) => {
+    Product.belongsTo(Product, { as: 'parent', foreignKey: 'parentId' });
+    Product.hasMany(Product, { as: 'children', foreignKey: 'parentId' });
+    Product.belongsToMany(models.AttributeValue, { 
+      through: 'ProductAttributes',
+      as: 'attributes'
+    });
+  };
+
+  return Product;
+};
 module.exports = Product;

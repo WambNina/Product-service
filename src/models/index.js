@@ -4,10 +4,42 @@ const Product = require('./Product');
 const ProductImage = require('./ProductImage');
 const ProductAttribute = require('./ProductAttribute');
 const ProductVariant = require('./ProductVariant');
-const Stock = require('./Stock'); // Add this
-const StockMovement = require('./StockMovement'); // Add this
+const Stock = require('./Stock');
+const StockMovement = require('./StockMovement');
+const { Op } = require('sequelize');
 
-// Existing associations
+// 🆕 AJOUTER CES IMPORTS MANQUANTS
+const AttributeDefinition = require('./AttributeDefinition');
+const AttributeValue = require('./AttributeValue');
+
+// ==========================================
+// ASSOCIATIONS ATTRIBUTES (NOUVEAU)
+// ==========================================
+
+AttributeDefinition.hasMany(AttributeValue, { 
+  as: 'values', 
+  foreignKey: 'attributeDefinitionId' 
+});
+
+AttributeValue.belongsTo(AttributeDefinition, { 
+  foreignKey: 'attributeDefinitionId' 
+});
+
+Product.belongsToMany(AttributeValue, { 
+  through: 'ProductAttributeValues',
+  as: 'attributeValues',
+  foreignKey: 'productId'
+});
+
+AttributeValue.belongsToMany(Product, {
+  through: 'ProductAttributeValues',
+  foreignKey: 'attributeValueId'
+});
+
+// ==========================================
+// ASSOCIATIONS EXISTANTES
+// ==========================================
+
 Category.hasMany(Product, { foreignKey: 'category_id', as: 'products' });
 Product.belongsTo(Category, { foreignKey: 'category_id', as: 'category' });
 
@@ -20,7 +52,7 @@ ProductAttribute.belongsTo(Product, { foreignKey: 'product_id', as: 'product' })
 Product.hasMany(ProductVariant, { foreignKey: 'product_id', as: 'variants', onDelete: 'CASCADE' });
 ProductVariant.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 
-// NEW: Stock associations
+// Stock associations
 Product.hasOne(Stock, { foreignKey: 'product_id', as: 'stock', onDelete: 'CASCADE' });
 Stock.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 
@@ -33,6 +65,10 @@ StockMovement.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 ProductVariant.hasMany(StockMovement, { foreignKey: 'variant_id', as: 'stockMovements', onDelete: 'CASCADE' });
 StockMovement.belongsTo(ProductVariant, { foreignKey: 'variant_id', as: 'variant' });
 
+// ==========================================
+// EXPORTS
+// ==========================================
+
 module.exports = {
   sequelize,
   Category,
@@ -40,6 +76,10 @@ module.exports = {
   ProductImage,
   ProductAttribute,
   ProductVariant,
-  Stock,           // Export
-  StockMovement    // Export
+  Stock,
+  StockMovement,
+  // 🆕 EXPORTER LES NOUVEAUX MODÈLES
+  AttributeDefinition,
+  AttributeValue, 
+  Op
 };

@@ -3,8 +3,50 @@
   "info": {
     "title": "Product Service API",
     "version": "1.0.0",
-    "description": "Product microservice"
+    "description": "Product microservice avec gestion modulaire des variants (color, size, capacity, weight) et pricing dynamique"
   },
+  "tags": [
+    {
+      "name": "Products",
+      "description": "Gestion des produits"
+    },
+    {
+      "name": "Variants",
+      "description": "Gestion des variants de produits (color, size, capacity, weight) avec pricing modulaire"
+    },
+    {
+      "name": "Pricing",
+      "description": "Calcul des prix basé sur les attributs sélectionnés"
+    },
+    {
+      "name": "Search",
+      "description": "Recherche et filtrage de produits"
+    },
+    {
+      "name": "Discovery",
+      "description": "Découverte de produits (featured, related, reviews)"
+    },
+    {
+      "name": "Categories",
+      "description": "Gestion des catégories"
+    },
+    {
+      "name": "Merchants",
+      "description": "Gestion des produits par marchand"
+    },
+    {
+      "name": "Stores",
+      "description": "Gestion des produits par magasin"
+    },
+    {
+      "name": "Images",
+      "description": "Gestion des images produits"
+    },
+    {
+      "name": "Stock",
+      "description": "Gestion du stock et inventaire"
+    }
+  ],
   "paths": {
     "/api/v1/products": {
       "get": {
@@ -67,7 +109,7 @@
                   "price": {
                     "type": "number",
                     "format": "float",
-                    "example": 4000000.0
+                    "example": 4000000
                   },
                   "merchant_id": { "type": "string", "example": "AB37" },
                   "store_id": { "type": "string", "example": "OM21" },
@@ -414,7 +456,7 @@
     },
     "/api/v1/products/{id}/variants": {
       "get": {
-        "summary": "Get product variants",
+        "summary": "Get product variants with pricing details",
         "tags": ["Variants"],
         "security": [{ "bearerAuth": [] }],
         "parameters": [
@@ -422,19 +464,20 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": { "type": "string", "format": "uuid" },
             "description": "Product ID"
           }
         ],
         "responses": {
           "200": {
-            "description": "List of variants",
+            "description": "List of variants with price breakdown",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "success": { "type": "boolean" },
+                    "count": { "type": "integer" },
                     "data": {
                       "type": "array",
                       "items": { "$ref": "#/components/schemas/ProductVariant" }
@@ -448,7 +491,7 @@
         }
       },
       "post": {
-        "summary": "Add variant to product",
+        "summary": "Add single variant with modular pricing",
         "tags": ["Variants"],
         "security": [{ "bearerAuth": [] }],
         "parameters": [
@@ -456,7 +499,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": { "type": "string", "format": "uuid" },
             "description": "Product ID"
           }
         ],
@@ -470,7 +513,7 @@
         },
         "responses": {
           "201": {
-            "description": "Variant created",
+            "description": "Variant created with calculated price",
             "content": {
               "application/json": {
                 "schema": {
@@ -492,9 +535,9 @@
     "/api/v1/products/{id}/variants/batch": {
       "post": {
         "tags": ["Variants"],
-        "summary": "Upload product image and create multiple variants",
-        "description": "Upload product image and configure color/size/weight variants in batch",
-        "operationId": "uploadProductImageAndCreateVariants",
+        "summary": "Upload image and create multiple variants with modular pricing",
+        "description": "Upload product image and create color/size/capacity/weight variants in batch. Supports two pricing modes: capacity-based (electronics) or modifier-based (clothing).",
+        "operationId": "createBatchVariants",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
           {
@@ -502,10 +545,7 @@
             "in": "path",
             "required": true,
             "description": "Product ID",
-            "schema": {
-              "type": "string",
-              "example": "1a2ace3d-f1ba-4779-8aac-e336360faf12"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
@@ -514,7 +554,7 @@
             "multipart/form-data": {
               "schema": {
                 "type": "object",
-                "required": ["image", "colors", "sizes"],
+                "required": ["image"],
                 "properties": {
                   "image": {
                     "type": "string",
@@ -522,35 +562,40 @@
                     "description": "Product image file (jpg, png, webp)"
                   },
                   "colors": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "enum": ["#000000", "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FFFFFF", "#0000FF"]
-                    },
-                    "description": "Selected colors (checkbox array)"
+                    "type": "string",
+                    "description": "JSON array of color objects with priceImpact",
+                    "example": "[{\"value\":\"#FF0000\",\"displayValue\":\"Rouge\",\"priceImpact\":50,\"type\":\"hex\"}]"
                   },
                   "sizes": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "enum": ["XS", "S", "M", "L", "XL", "XXL", "One Size"]
-                    },
-                    "description": "Selected sizes (checkbox array)"
+                    "type": "string",
+                    "description": "JSON array of size objects with priceImpact",
+                    "example": "[{\"value\":\"XL\",\"priceImpact\":10}]"
                   },
-                  "weight": {
+                  "capacities": {
+                    "type": "string",
+                    "description": "JSON array of capacity objects with basePrice (for electronics)",
+                    "example": "[{\"value\":\"256GB\",\"displayValue\":\"256 Go\",\"basePrice\":1199}]"
+                  },
+                  "weights": {
+                    "type": "string",
+                    "description": "JSON array of weight objects with priceImpact",
+                    "example": "[{\"value\":0.5,\"label\":\"500g\",\"priceImpact\":5}]"
+                  },
+                  "basePrice": {
                     "type": "number",
-                    "default": 0,
-                    "description": "Product weight in kg"
+                    "description": "Base price for standard products (if no capacities)",
+                    "example": 29.99
                   },
-                  "price": {
-                    "type": "decimal",
-                    "default": 0,
-                    "description": "set price"
+                  "pricingStrategy": {
+                    "type": "string",
+                    "enum": ["capacity-based", "modifier-based"],
+                    "default": "modifier-based",
+                    "description": "capacity-based: electronics (iPhone), modifier-based: clothing"
                   },
                   "is_default": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Set as default product image"
+                    "description": "Set first variant as default"
                   }
                 }
               }
@@ -559,7 +604,7 @@
         },
         "responses": {
           "201": {
-            "description": "Image uploaded and variants created",
+            "description": "Image uploaded and variants created with calculated prices",
             "content": {
               "application/json": {
                 "schema": {
@@ -570,24 +615,21 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "product_id": { "type": "string" },
+                        "product_id": { "type": "string", "format": "uuid" },
                         "image_url": { "type": "string" },
                         "filename": { "type": "string" },
-                        "variants_created": { "type": "number" },
+                        "pricing_strategy": { "type": "string" },
+                        "variants_created": { "type": "integer" },
+                        "price_range": {
+                          "type": "object",
+                          "properties": {
+                            "min": { "type": "number" },
+                            "max": { "type": "number" }
+                          }
+                        },
                         "variants": {
                           "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": { "type": "string" },
-                              "sku": { "type": "string" },
-                              "color": { "type": "string" },
-                              "size": { "type": "string" },
-                              "weight": { "type": "number" },
-                              "price": { "type": "decimal"},
-                              "is_default": { "type": "boolean" }
-                            }
-                          }
+                          "items": { "$ref": "#/components/schemas/ProductVariant" }
                         }
                       }
                     }
@@ -601,9 +643,218 @@
         }
       }
     },
-    "/api/v1/products/{variantId}": {
-      "put": {
-        "summary": "Update variant",
+    "/api/v1/products/{id}/calculate-price": {
+      "post": {
+        "tags": ["Pricing", "Variants"],
+        "summary": "Calculate price for selected variant attributes",
+        "description": "Preview final price before purchase based on selected color, size, capacity with modular pricing",
+        "operationId": "calculateVariantPrice",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product ID",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["attributes"],
+                "properties": {
+                  "attributes": {
+                    "type": "object",
+                    "properties": {
+                      "color": {
+                        "type": "string",
+                        "description": "Selected color value or ID",
+                        "example": "#FF0000"
+                      },
+                      "size": {
+                        "type": "string",
+                        "example": "XL"
+                      },
+                      "capacity": {
+                        "type": "string",
+                        "example": "256GB",
+                        "description": "For electronics"
+                      },
+                      "weight": {
+                        "type": "number",
+                        "example": 0.5
+                      }
+                    }
+                  },
+                  "quantity": {
+                    "type": "integer",
+                    "default": 1,
+                    "minimum": 1
+                  }
+                }
+              },
+              "examples": {
+                "clothing": {
+                  "summary": "T-shirt with color and size",
+                  "value": {
+                    "attributes": { "color": "#000000", "size": "XL" },
+                    "quantity": 2
+                  }
+                },
+                "electronics": {
+                  "summary": "iPhone with capacity and color",
+                  "value": {
+                    "attributes": { "capacity": "512GB", "color": "Titanium Blue" },
+                    "quantity": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Price calculated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "product_id": { "type": "string" },
+                        "selected_attributes": {
+                          "type": "object",
+                          "properties": {
+                            "color": { "type": "string" },
+                            "size": { "type": "string" },
+                            "capacity": { "type": "string" },
+                            "weight": { "type": "number" }
+                          }
+                        },
+                        "existing_variant": {
+                          "type": "object",
+                          "properties": {
+                            "id": { "type": "string" },
+                            "sku": { "type": "string" },
+                            "stock": { "type": "integer" }
+                          }
+                        },
+                        "price_breakdown": {
+                          "type": "object",
+                          "properties": {
+                            "base_price": { "type": "number" },
+                            "modifiers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "type": { "type": "string", "enum": ["color", "size", "weight"] },
+                                  "value": { "type": "string" },
+                                  "impact": { "type": "number" }
+                                }
+                              }
+                            },
+                            "subtotal": { "type": "number" },
+                            "quantity": { "type": "integer" },
+                            "total": { "type": "number" }
+                          }
+                        },
+                        "final_price": { "type": "number" },
+                        "formatted_price": { "type": "string", "example": "1 299.00 €" },
+                        "sku": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid attributes or combination not available" },
+          "404": { "description": "Product not found" }
+        }
+      }
+    },
+    "/api/v1/products/{id}/price-matrix": {
+      "get": {
+        "tags": ["Pricing", "Variants"],
+        "summary": "Get all price combinations matrix",
+        "description": "Returns all possible variant combinations with their calculated prices. Useful for displaying a comparison grid.",
+        "operationId": "getPriceMatrix",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Price matrix generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "product_id": { "type": "string" },
+                        "product_name": { "type": "string" },
+                        "total_combinations": { "type": "integer" },
+                        "price_range": {
+                          "type": "object",
+                          "properties": {
+                            "min": { "type": "number" },
+                            "max": { "type": "number" }
+                          }
+                        },
+                        "matrix": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "combination": {
+                                "type": "object",
+                                "properties": {
+                                  "color": { "type": "string" },
+                                  "size": { "type": "string" },
+                                  "capacity": { "type": "string" }
+                                }
+                              },
+                              "sku": { "type": "string" },
+                              "price": { "type": "number" },
+                              "calculated_price": { "type": "number" },
+                              "override_price": { "type": "number", "nullable": true },
+                              "stock": { "type": "integer" },
+                              "in_stock": { "type": "boolean" },
+                              "is_default": { "type": "boolean" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Product not found" }
+        }
+      }
+    },
+    "/api/v1/variants/{variantId}": {
+      "get": {
+        "summary": "Get variant by ID",
         "tags": ["Variants"],
         "security": [{ "bearerAuth": [] }],
         "parameters": [
@@ -611,21 +862,65 @@
             "name": "variantId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" },
-            "description": "Variant ID (UUID)"
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "Variant ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Variant details with price breakdown",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/ProductVariant" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Variant not found" }
+        }
+      },
+      "put": {
+        "summary": "Update variant (including price modifiers)",
+        "tags": ["Variants"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "variantId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "Variant ID"
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ProductVariantInput" }
+              "schema": {
+                "allOf": [
+                  { "$ref": "#/components/schemas/ProductVariantInput" },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "overridePrice": {
+                        "type": "number",
+                        "description": "Manual price override (skips calculation)"
+                      }
+                    }
+                  }
+                ]
+              }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Variant updated",
+            "description": "Variant updated with recalculated price",
             "content": {
               "application/json": {
                 "schema": {
@@ -651,8 +946,8 @@
             "name": "variantId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" },
-            "description": "Variant ID (UUID)"
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "Variant ID"
           }
         ],
         "responses": {
@@ -675,6 +970,72 @@
         }
       }
     },
+    "/api/v1/variants/{variantId}/price": {
+      "put": {
+        "tags": ["Pricing", "Variants"],
+        "summary": "Update variant specific price (override)",
+        "description": "Override the calculated price for a specific variant (promotion, clearance, etc.)",
+        "operationId": "updateVariantPrice",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "variantId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["price"],
+                "properties": {
+                  "price": {
+                    "type": "number",
+                    "description": "Override price (null to revert to calculated)"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": ["promotion", "clearance", "custom", "revert"],
+                    "description": "Reason for price override"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Price updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "variant_id": { "type": "string" },
+                        "calculated_price": { "type": "number" },
+                        "override_price": { "type": "number" },
+                        "previous_price": { "type": "number" },
+                        "final_price": { "type": "number" },
+                        "reason": { "type": "string" },
+                        "savings": { "type": "number" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/products/{id}/reviews": {
       "get": {
         "summary": "Get product reviews",
@@ -684,7 +1045,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": { "type": "string", "format": "uuid" },
             "description": "Product ID"
           },
           {
@@ -760,7 +1121,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": { "type": "string", "format": "uuid" },
             "description": "Product ID"
           }
         ],
@@ -810,7 +1171,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": { "type": "string", "format": "uuid" },
             "description": "Product ID"
           },
           {
@@ -1131,7 +1492,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
@@ -1170,7 +1531,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {
@@ -1198,13 +1559,13 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": { "type": "string", "format": "uuid" }
           },
           {
             "name": "imageId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {
@@ -1223,7 +1584,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": { "type": "string", "format": "uuid" },
             "description": "Product ID"
           }
         ],
@@ -1276,7 +1637,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
@@ -1288,7 +1649,7 @@
                 "required": ["quantity"],
                 "properties": {
                   "quantity": { "type": "integer", "minimum": 0 },
-                  "variantId": { "type": "string" },
+                  "variantId": { "type": "string", "format": "uuid" },
                   "reason": { "type": "string" }
                 }
               }
@@ -1310,7 +1671,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
@@ -1322,7 +1683,7 @@
                 "required": ["quantity"],
                 "properties": {
                   "quantity": { "type": "integer", "minimum": 1 },
-                  "variantId": { "type": "string" },
+                  "variantId": { "type": "string", "format": "uuid" },
                   "reason": { "type": "string" },
                   "referenceId": { "type": "string" }
                 }
@@ -1335,7 +1696,7 @@
         }
       }
     },
-    "/api/v1/products/{id}/stock/decrease": {
+    "/api/v1/api/v1/products/{id}/stock/decrease": {
       "post": {
         "summary": "Decrease stock",
         "tags": ["Stock"],
@@ -1345,7 +1706,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
@@ -1357,7 +1718,7 @@
                 "required": ["quantity"],
                 "properties": {
                   "quantity": { "type": "integer", "minimum": 1 },
-                  "variantId": { "type": "string" },
+                  "variantId": { "type": "string", "format": "uuid" },
                   "reason": { "type": "string" },
                   "referenceId": { "type": "string" },
                   "allowNegative": { "type": "boolean", "default": false }
@@ -1407,14 +1768,67 @@
           "id": { "type": "string", "format": "uuid" },
           "product_id": { "type": "string", "format": "uuid" },
           "sku": { "type": "string" },
-          "color": { "type": "string" },
-          "size": { "type": "string" },
-          "attributes": { "type": "object" },
-          "price_adjustment": { "type": "number" },
-          "quantity": { "type": "integer" },
-          "is_default": { "type": "boolean" },
-          "weight": { "type": "number" },
           "barcode": { "type": "string" },
+          "attributes": {
+            "type": "object",
+            "description": "Complete variant attributes with pricing info",
+            "properties": {
+              "color": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "string", "example": "#FF0000" },
+                  "displayValue": { "type": "string", "example": "Rouge Profond" },
+                  "type": { "type": "string", "enum": ["hex", "text", "image"] },
+                  "priceImpact": { "type": "number", "example": 50 },
+                  "metadata": { "type": "object" }
+                }
+              },
+              "size": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "string", "example": "XL" },
+                  "priceImpact": { "type": "number", "example": 10 }
+                }
+              },
+              "capacity": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "string", "example": "256GB" },
+                  "displayValue": { "type": "string", "example": "256 Go" },
+                  "basePrice": { "type": "number", "example": 1199 }
+                }
+              },
+              "weight": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "number", "example": 0.5 },
+                  "label": { "type": "string", "example": "500g" },
+                  "priceImpact": { "type": "number", "example": 5 }
+                }
+              }
+            }
+          },
+          "color": { "type": "string", "description": "Flat color value from attributes.color.value" },
+          "size": { "type": "string", "description": "Flat size value from attributes.size.value or attributes.capacity.value" },
+          "base_price": { "type": "number", "description": "Product base price at creation" },
+          "calculated_price": { "type": "number", "description": "Auto-calculated: base + color + size + weight impacts" },
+          "override_price": { "type": "number", "nullable": true, "description": "Manual price override" },
+          "final_price": { "type": "number", "description": "Effective price (override || calculated)" },
+          "price_breakdown": {
+            "type": "object",
+            "properties": {
+              "base": { "type": "number" },
+              "color_modifier": { "type": "number" },
+              "size_modifier": { "type": "number" },
+              "weight_modifier": { "type": "number" },
+              "total": { "type": "number" },
+              "is_override": { "type": "boolean" }
+            }
+          },
+          "quantity": { "type": "integer", "description": "Stock quantity" },
+          "weight": { "type": "number", "description": "Weight in kg" },
+          "image_url": { "type": "string" },
+          "is_default": { "type": "boolean" },
           "status": { "type": "string", "enum": ["active", "inactive", "out_of_stock"] },
           "created_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" }
@@ -1425,28 +1839,53 @@
         "required": ["sku"],
         "properties": {
           "sku": { "type": "string", "maxLength": 100 },
-          "color": { "type": "string" },
-          "size": { "type": "string" },
-          "attributes": { 
+          "barcode": { "type": "string" },
+          "attributes": {
             "type": "object",
-            "description": "Additional variant attributes as key-value pairs"
+            "description": "Variant attributes with pricing",
+            "properties": {
+              "color": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "string" },
+                  "displayValue": { "type": "string" },
+                  "type": { "type": "string", "enum": ["hex", "text", "image"] },
+                  "priceImpact": { "type": "number", "default": 0 },
+                  "metadata": { "type": "object" }
+                }
+              },
+              "size": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "string" },
+                  "priceImpact": { "type": "number", "default": 0 }
+                }
+              },
+              "capacity": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "string" },
+                  "displayValue": { "type": "string" },
+                  "basePrice": { "type": "number" }
+                }
+              },
+              "weight": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "number" },
+                  "label": { "type": "string" },
+                  "priceImpact": { "type": "number", "default": 0 }
+                }
+              }
+            }
           },
-          "price_adjustment": { 
-            "type": "number",
-            "description": "Price adjustment from base product price"
-          },
-          "quantity": { 
-            "type": "integer",
-            "minimum": 0,
-            "default": 0
-          },
-          "is_default": { 
-            "type": "boolean",
-            "default": false,
-            "description": "Whether this is the default variant"
-          },
+          "base_price": { "type": "number" },
+          "override_price": { "type": "number", "description": "Manual price (skips calculation)" },
+          "quantity": { "type": "integer", "minimum": 0, "default": 0 },
           "weight": { "type": "number" },
-          "barcode": { "type": "string" }
+          "image_url": { "type": "string" },
+          "is_default": { "type": "boolean", "default": false },
+          "status": { "type": "string", "enum": ["active", "inactive", "out_of_stock"], "default": "active" }
         }
       },
       "ProductImage": {

@@ -1,97 +1,173 @@
 const variantService = require('../services/variantService');
+const pricingService = require('../services/pricingService');
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/apiError');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
-const path = require('path');
+const { Product, ProductVariant } = require('../models');
+const { Op } = require('sequelize');
 
+/**
+ * Get all variants for a product
+ */
 exports.getProductVariants = catchAsync(async (req, res) => {
   const { id } = req.params;
   const variants = await variantService.getVariantsByProductId(id);
   
+  const enrichedVariants = variants.map(variant => ({
+    ...variant.toJSON(),
+    price_breakdown: pricingService.calculateBreakdown(variant)
+  }));
+
   res.status(200).json({
     success: true,
-    data: variants
+    count: enrichedVariants.length,
+    data: enrichedVariants
   });
 });
 
+/**
+ * Create single variant
+ */
 exports.createVariant = catchAsync(async (req, res) => {
   const { id } = req.params;
+  
+  if (!req.body.final_price && !req.body.override_price) {
+    const product = await variantService.getProductById(id);
+    req.body.calculated_price = pricingService.calculateVariantPrice({
+      basePrice: req.body.capacity?.basePrice || product.price,
+      color: req.body.color,
+      size: req.body.size,
+      weight: req.body.weight,
+      capacity: req.body.capacity
+    });
+    req.body.final_price = req.body.calculated_price;
+  }
+
+  if (!req.body.sku) {
+    const product = await variantService.getProductById(id);
+    req.body.sku = generateSKU(
+      product.name,
+      req.body.capacity?.value,
+      req.body.color?.value,
+      req.body.size?.value,
+      req.body.weight?.value
+    );
+  }
+
   const variant = await variantService.createVariant(id, req.body);
   
   res.status(201).json({
     success: true,
     message: 'Variante créée avec succès',
-    data: variant
+    data: {
+      ...variant.toJSON(),
+      price_breakdown: pricingService.calculateBreakdown(variant)
+    }
   });
 });
 
 /**
- * Create multiple variants with image upload
- * POST /api/v1/products/:id/variants/batch
+ * Create batch variants with image - CORRIGÉ
  */
 exports.createBatchVariants = catchAsync(async (req, res) => {
   const productId = req.params.id;
   
   console.log('🔥 Batch variant creation started');
   console.log('Product ID:', productId);
-  console.log('File:', req.file);
-  console.log('Body:', req.body);
 
-  // Handle arrays from form-data (multer parses them as strings if single value)
-  let colors = req.body.colors || [];
-  let sizes = req.body.sizes || [];
+  // 🆕 Parser les champs JSON
+  let colors = parseJSONField(req.body.colors, []);
+  let sizes = parseJSONField(req.body.sizes, []);
+  let capacities = parseJSONField(req.body.capacities, []);
+  let weights = parseJSONField(req.body.weights, []);
   
-  // Convert to arrays if single values
-  if (!Array.isArray(colors)) colors = [colors];
-  if (!Array.isArray(sizes)) sizes = [sizes];
+  // Rétrocompatibilité : convertir strings en objets
+  if (colors.length === 0 && req.body.colors) {
+    let legacyColors = Array.isArray(req.body.colors) ? req.body.colors : [req.body.colors];
+    colors = legacyColors
+      .filter(c => c && c.trim() !== '')
+      .map(c => ({
+        value: c,
+        displayValue: c,
+        type: c.startsWith('#') ? 'hex' : 'text',
+        priceImpact: 0,
+        metadata: c.startsWith('#') ? { hex: c } : {}
+      }));
+  }
+  
+  if (sizes.length === 0 && req.body.sizes) {
+    let legacySizes = Array.isArray(req.body.sizes) ? req.body.sizes : [req.body.sizes];
+    sizes = legacySizes
+      .filter(s => s && s.trim() !== '')
+      .map(s => ({
+        value: s,
+        priceImpact: 0
+      }));
+  }
 
-  // Filter out empty values
-  colors = colors.filter(c => c && c.trim() !== '');
-  sizes = sizes.filter(s => s && s.trim() !== '');
+  // Déterminer stratégie pricing
+  const pricingStrategy = req.body.pricingStrategy || 
+    (capacities.length > 0 ? 'capacity-based' : 'modifier-based');
 
   // Validation
   if (!req.file) {
     throw new ApiError('Image is required', 400);
   }
 
-  if (colors.length === 0 || sizes.length === 0) {
-    // Clean up uploaded file
-    if (req.file.path) {
-      fs.unlinkSync(req.file.path);
-    }
-    throw new ApiError('At least one color and one size must be selected', 400);
+  if (colors.length === 0) {
+    cleanupFile(req.file);
+        throw new ApiError('At least one color must be selected', 400);
   }
 
-  // Parse values
-  const weight = parseFloat(req.body.weight) || 0;
-  const price = parseFloat(req.body.price) || 0;
-  const isDefault = req.body.is_default === 'true' || req.body.is_default === true;
+  if (capacities.length === 0 && sizes.length === 0 && weights.length === 0) {
+    cleanupFile(req.file);
+    throw new ApiError('At least one size or weight must be selected (or use capacities for electronics)', 400);
+  }
 
-  // Check if product exists
-  const product = await variantService.getProductById(productId);
+  // 🆕 Vérifier que le produit existe
+  const product = await Product.findByPk(productId);
   if (!product) {
-    // Clean up uploaded file
-    if (req.file.path) {
-      fs.unlinkSync(req.file.path);
-    }
+    cleanupFile(req.file);
     throw new ApiError('Product not found', 404);
   }
 
+  console.log('✅ Produit trouvé:', product.name);
+
   const imageUrl = `/uploads/products/${req.file.filename}`;
 
-  // Create variants using service
-  const result = await variantService.createBatchVariants({
-    productId,
-    colors,
-    sizes,
-    weight,
-    price,
-    isDefault,
-    imageUrl: imageUrl,
-    filename: req.file.filename,
-    file: req.file // 👈 important
-  });
+  // 🆕 Création des variants selon la stratégie
+  let result;
+  
+  if (pricingStrategy === 'capacity-based' && capacities.length > 0) {
+    // Mode Électronique
+    result = await createElectronicVariants({
+      product,
+      productId,
+      capacities,
+      colors,
+      sizes: sizes.length > 0 ? sizes : [{ value: null, priceImpact: 0 }],
+      weights: weights.length > 0 ? weights : [{ value: null, priceImpact: 0 }],
+      imageUrl,
+      isDefault: req.body.is_default === 'true' || req.body.is_default === true,
+      file: req.file
+    });
+  } else {
+    // Mode Standard
+    const basePrice = parseFloat(req.body.price) || parseFloat(product.price) || 0;
+    
+    result = await createStandardVariants({
+      product,
+      productId,
+      colors,
+      sizes: sizes.length > 0 ? sizes : [{ value: null, priceImpact: 0 }],
+      weights: weights.length > 0 ? weights : [{ value: parseFloat(req.body.weight) || 0, priceImpact: 0 }],
+      basePrice,
+      imageUrl,
+      isDefault: req.body.is_default === 'true' || req.body.is_default === true,
+      file: req.file
+    });
+  }
 
   res.status(201).json({
     success: true,
@@ -100,29 +176,516 @@ exports.createBatchVariants = catchAsync(async (req, res) => {
       product_id: productId,
       image_url: imageUrl,
       filename: req.file.filename,
+      pricing_strategy: pricingStrategy,
       variants_created: result.variantsCreated,
+      price_range: result.priceRange,
       variants: result.variants
     }
   });
 });
 
-exports.updateVariant = catchAsync(async (req, res) => {
-  const { variantId } = req.params;
-  const variant = await variantService.updateVariant(variantId, req.body);
+/**
+ * Calculate price for selected attributes
+ */
+exports.calculatePrice = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { attributes, quantity = 1 } = req.body;
+
+  const product = await Product.findByPk(id);
+  if (!product) {
+    throw new ApiError('Product not found', 404);
+  }
+
+  // Chercher variant existant
+  const whereConditions = { product_id: id };
   
+  if (attributes.color) whereConditions.color = attributes.color;
+  if (attributes.size) whereConditions.size = attributes.size;
+  
+  if (attributes.capacity) {
+    whereConditions[Op.or] = [
+      { size: attributes.capacity },
+      { capacity: attributes.capacity }
+    ];
+  }
+
+  const existingVariant = await ProductVariant.findOne({ where: whereConditions });
+
+  // Calculer prix
+  const calculation = pricingService.calculatePrice(product, attributes);
+  
+  const unitPrice = existingVariant ? existingVariant.final_price : calculation.finalPrice;
+  const totalPrice = unitPrice * quantity;
+
   res.status(200).json({
     success: true,
-    message: 'Variante mise à jour avec succès',
-    data: variant
+    data: {
+      product_id: id,
+      selected_attributes: attributes,
+      existing_variant: existingVariant ? {
+        id: existingVariant.id,
+        sku: existingVariant.sku,
+        stock: existingVariant.quantity
+      } : null,
+      price_breakdown: calculation,
+      quantity,
+      unit_price: unitPrice,
+      total_price: totalPrice,
+      formatted_price: formatPrice(totalPrice)
+    }
   });
 });
 
-exports.deleteVariant = catchAsync(async (req, res) => {
-  const { variantId } = req.params;
-  await variantService.deleteVariant(variantId);
+/**
+ * Get price matrix
+ */
+exports.getPriceMatrix = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  
+  const product = await Product.findByPk(id);
+  if (!product) {
+    throw new ApiError('Product not found', 404);
+  }
+
+  const variants = await ProductVariant.findAll({ where: { product_id: id } });
+  
+  const matrix = variants.map(variant => ({
+    combination: {
+      color: variant.color,
+      size: variant.size,
+      capacity: variant.capacity
+    },
+    sku: variant.sku,
+    price: variant.final_price,
+    stock: variant.quantity,
+    in_stock: variant.quantity > 0,
+    is_default: variant.is_default
+  }));
+
+  const prices = matrix.map(m => m.price).filter(p => p);
   
   res.status(200).json({
     success: true,
-    message: 'Variante supprimée avec succès'
+    data: {
+      product_id: id,
+      product_name: product.name,
+      total_combinations: matrix.length,
+      price_range: prices.length > 0 ? {
+        min: Math.min(...prices),
+        max: Math.max(...prices)
+      } : null,
+      matrix
+    }
   });
 });
+
+/**
+ * Get single variant by ID
+ * GET /api/v1/variants/:variantId
+ */
+ exports.getVariantById = catchAsync(async (req, res) => {
+  const { variantId } = req.params;
+  
+  const variant = await ProductVariant.findByPk(variantId, {
+    include: [
+      { 
+        model: Product, 
+        as: 'product', 
+        attributes: ['id', 'name', 'price', 'merchant_id', 'store_id'] 
+      }
+    ]
+  });
+  
+  if (!variant) {
+    throw new ApiError('Variant not found', 404);
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      id: variant.id,
+      product_id: variant.product_id,
+      sku: variant.sku,
+      barcode: variant.barcode,
+      attributes: parseJSONField(variant.attributes),
+      color: variant.color,
+      size: variant.size,
+      capacity: variant.capacity,
+      price_adjustment: variant.price_adjustment,
+      final_price: variant.final_price,
+      price: variant.price,
+      compare_at_price: variant.compare_at_price,
+      quantity: variant.quantity,
+      weight: variant.weight,
+      image_url: variant.image_url,
+      is_default: variant.is_default,
+      status: variant.status,
+      product: variant.product,
+      price_breakdown: pricingService.calculateBreakdown(variant),
+      created_at: variant.created_at,
+      updated_at: variant.updated_at
+    }
+  });
+});
+
+/**
+ * Update variant
+ */
+exports.updateVariant = catchAsync(async (req, res) => {
+  const { variantId } = req.params;
+  
+  const variant = await ProductVariant.findByPk(variantId);
+  if (!variant) {
+    throw new ApiError('Variant not found', 404);
+  }
+
+  // Recalculer prix si attributs changent
+  if (req.body.attributes) {
+    const product = await Product.findByPk(variant.product_id);
+    
+    const merged = {
+      color: req.body.attributes.color || variant.attributes?.color,
+      size: req.body.attributes.size || variant.attributes?.size,
+      weight: req.body.attributes.weight || variant.attributes?.weight,
+      capacity: req.body.attributes.capacity || variant.attributes?.capacity
+    };
+
+    const basePrice = merged.capacity?.basePrice || product.price;
+    const colorImpact = merged.color?.priceImpact || 0;
+    const sizeImpact = merged.size?.priceImpact || 0;
+    const weightImpact = merged.weight?.priceImpact || 0;
+    
+    req.body.calculated_price = basePrice + colorImpact + sizeImpact + weightImpact;
+    
+    if (!req.body.override_price) {
+      req.body.final_price = req.body.calculated_price;
+    }
+  }
+
+  await variant.update(req.body);
+  
+  const updated = await ProductVariant.findByPk(variantId);
+
+  res.status(200).json({
+    success: true,
+    message: 'Variant updated',
+    data: updated
+  });
+});
+
+/**
+ * Update variant price (override)
+ */
+exports.updateVariantPrice = catchAsync(async (req, res) => {
+  const { variantId } = req.params;
+  const { price, reason } = req.body;
+
+  const variant = await ProductVariant.findByPk(variantId);
+  if (!variant) {
+    throw new ApiError('Variant not found', 404);
+  }
+
+  const oldPrice = variant.final_price;
+  
+  await variant.update({
+    override_price: price,
+    final_price: price
+  });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      variant_id: variantId,
+      previous_price: oldPrice,
+      new_price: price,
+      calculated_price: variant.calculated_price,
+      override_price: price,
+      reason: reason || 'manual_override'
+    }
+  });
+});
+
+/**
+ * Delete variant
+ */
+exports.deleteVariant = catchAsync(async (req, res) => {
+  const { variantId } = req.params;
+  
+  const variant = await ProductVariant.findByPk(variantId);
+  if (!variant) {
+    throw new ApiError('Variant not found', 404);
+  }
+
+  if (variant.is_default) {
+    const count = await ProductVariant.count({ 
+      where: { product_id: variant.product_id } 
+    });
+    
+    if (count <= 1) {
+      throw new ApiError('Cannot delete the last variant', 400);
+    }
+  }
+
+  await variant.destroy();
+
+  res.status(200).json({
+    success: true,
+    message: 'Variant deleted'
+  });
+});
+
+// ==========================================
+// FONCTIONS UTILITAIRES
+// ==========================================
+
+function parseJSONField(field, defaultValue = []) {
+  if (!field) return defaultValue;
+  try {
+    if (typeof field === 'string') {
+      return JSON.parse(field);
+    }
+    return field;
+  } catch (e) {
+    console.warn('Failed to parse JSON field:', field);
+    return defaultValue;
+  }
+}
+
+function cleanupFile(file) {
+  if (file && file.path && fs.existsSync(file.path)) {
+    fs.unlinkSync(file.path);
+  }
+}
+
+async function createElectronicVariants({ product, productId, capacities, colors, sizes, weights, imageUrl, isDefault, file }) {
+  const variants = [];
+  let variantCount = 0;
+  
+  for (const capacity of capacities) {
+    for (const color of colors) {
+      for (const size of sizes) {
+        for (const weight of weights) {
+          const basePrice = parseFloat(capacity.basePrice) || parseFloat(product.price) || 0;
+          const colorImpact = parseFloat(color.priceImpact) || 0;
+          const sizeImpact = parseFloat(size.priceImpact) || 0;
+          const weightImpact = parseFloat(weight.priceImpact) || 0;
+          
+          const finalPrice = basePrice + colorImpact + sizeImpact + weightImpact;
+          
+          const variant = {
+            id: uuidv4(),
+            product_id: productId,
+            sku: generateSKU(product.name, capacity.value, color.value, size.value, weight.value),
+            barcode: null,
+            attributes: JSON.stringify({
+              color: color.value ? {
+                value: color.value,
+                displayValue: color.displayValue || color.value,
+                type: color.type || 'hex',
+                priceImpact: colorImpact,
+                metadata: color.metadata || {}
+              } : null,
+              size: size.value ? {
+                value: size.value,
+                priceImpact: sizeImpact
+              } : null,
+              capacity: {
+                value: capacity.value,
+                displayValue: capacity.displayValue || capacity.value,
+                basePrice: basePrice
+              },
+              weight: weight.value ? {
+                value: weight.value,
+                label: weight.label || `${weight.value}kg`,
+                priceImpact: weightImpact
+              } : null
+            }),
+            color: color.value || null,
+            size: size.value || capacity.value,
+            capacity: capacity.value,
+            material: null,
+            pattern: null,
+            price_adjustment: colorImpact + sizeImpact + weightImpact,
+            final_price: finalPrice,
+            price: finalPrice,
+            compare_at_price: finalPrice,
+            quantity: 0,
+            weight: weight.value || null,
+            image_id: null,
+            image_url: imageUrl,
+            is_default: isDefault && variantCount === 0,
+            status: 'active',
+            position: variantCount,
+            base_price: basePrice,
+            calculated_price: finalPrice,
+            override_price: null,
+            pricing_metadata: JSON.stringify({
+              basePrice: basePrice,
+              colorImpact: colorImpact,
+              sizeImpact: sizeImpact,
+              weightImpact: weightImpact,
+              strategy: 'capacity-based'
+            }),
+            created_at: new Date(),
+            updated_at: new Date()
+          };
+          
+          variants.push(variant);
+          variantCount++;
+        }
+      }
+    }
+  }
+  
+  await ProductVariant.bulkCreate(variants);
+
+  // Créer l'image produit
+  await createProductImage(productId, variants[0]?.id, imageUrl, file, isDefault);
+
+  const prices = variants.map(v => v.final_price);
+  
+  return {
+    variantsCreated: variants.length,
+    variants,
+    priceRange: {
+      min: Math.min(...prices),
+      max: Math.max(...prices)
+    }
+  };
+}
+
+async function createStandardVariants({ product, productId, colors, sizes, weights, basePrice, imageUrl, isDefault, file }) {
+  const variants = [];
+  let variantCount = 0;
+  
+  for (const color of colors) {
+    for (const size of sizes) {
+      for (const weight of weights) {
+        const colorImpact = parseFloat(color.priceImpact) || 0;
+        const sizeImpact = parseFloat(size.priceImpact) || 0;
+        const weightImpact = parseFloat(weight.priceImpact) || 0;
+        
+        const finalPrice = basePrice + colorImpact + sizeImpact + weightImpact;
+        
+        const variant = {
+          id: uuidv4(),
+          product_id: productId,
+          sku: generateSKU(product.name, null, color.value, size.value, weight.value),
+          barcode: null,
+          attributes: JSON.stringify({
+            color: {
+              value: color.value,
+              displayValue: color.displayValue || color.value,
+              type: color.type || 'hex',
+              priceImpact: colorImpact,
+              metadata: color.metadata || {}
+            },
+            size: size.value ? {
+              value: size.value,
+              priceImpact: sizeImpact
+            } : null,
+            capacity: null,
+            weight: weight.value ? {
+              value: weight.value,
+              label: weight.label || `${weight.value}kg`,
+              priceImpact: weightImpact
+            } : null
+          }),
+          color: color.value,
+          size: size.value,
+          capacity: null,
+          material: null,
+          pattern: null,
+          price_adjustment: colorImpact + sizeImpact + weightImpact,
+          final_price: finalPrice,
+          price: finalPrice,
+          compare_at_price: finalPrice,
+          quantity: 0,
+          weight: weight.value || null,
+          image_id: null,
+          image_url: imageUrl,
+          is_default: isDefault && variantCount === 0,
+          status: 'active',
+          position: variantCount,
+          base_price: basePrice,
+          calculated_price: finalPrice,
+          override_price: null,
+          pricing_metadata: JSON.stringify({
+            basePrice: basePrice,
+            colorImpact: colorImpact,
+            sizeImpact: sizeImpact,
+            weightImpact: weightImpact,
+            strategy: 'modifier-based'
+          }),
+          created_at: new Date(),
+          updated_at: new Date()
+        };
+        
+        variants.push(variant);
+        variantCount++;
+      }
+    }
+  }
+  
+  await ProductVariant.bulkCreate(variants);
+
+  // Créer l'image produit
+  await createProductImage(productId, variants[0]?.id, imageUrl, file, isDefault);
+
+  const prices = variants.map(v => v.final_price);
+  
+  return {
+    variantsCreated: variants.length,
+    variants,
+    priceRange: {
+      min: Math.min(...prices),
+      max: Math.max(...prices)
+    }
+  };
+}
+
+async function createProductImage(productId, variantId, imageUrl, file, isDefault) {
+  const { ProductImage } = require('../models');
+  
+  if (!file) return;
+  
+  await ProductImage.create({
+    id: uuidv4(),
+    product_id: productId,
+    variant_id: variantId,
+    url: imageUrl,
+    filename: file.filename,
+    original_filename: file.originalname,
+    mime_type: file.mimetype,
+    size_bytes: file.size,
+    is_primary: isDefault,
+    sort_order: 0,
+    created_at: new Date(),
+    updated_at: new Date()
+  });
+}
+
+function generateSKU(productName, capacity, color, size, weight) {
+  const clean = (str) => {
+    if (!str) return '';
+    return str.toString().substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  };
+  
+  const parts = [
+    clean(productName).substring(0, 4),
+    capacity ? clean(capacity) : '',
+    color ? clean(color) : '',
+    size ? clean(size) : '',
+    weight ? clean(weight) : '',
+    uuidv4().substring(0, 4).toUpperCase()
+  ].filter(Boolean);
+  
+  return parts.join('-');
+}
+
+function formatPrice(price) {
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR'
+  }).format(price);
+}

@@ -8,6 +8,7 @@ const swaggerDocument = require('../swagger/swagger.json');
 
 const categoryRoutes = require('./routes/categoryRoutes');
 const productRoutes = require('./routes/productRoutes');
+const variantRoutes = require('./routes/variantRoutes');
 const { errorHandler } = require('./utils/apiError');
 const merchantRoutes = require('./routes/merchantRoutes');
 
@@ -17,6 +18,12 @@ const { v4: uuidv4 } = require('uuid');
 const Joi = require('joi');
 
 const app = express();
+
+// Avant les routes
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path}`, req.body);
+  next();
+});
 
 // Security middleware (LAN friendly)
 app.use(helmet({
@@ -67,12 +74,29 @@ app.get('/health', (req, res) => {
 });
 
 // Routes
+app.use('/api/v1/variants', variantRoutes);
 app.use('/api/v1/products', productRoutes);
 
 
 app.use('/api/v1/merchants', merchantRoutes);
 
 app.use('/api/v1/categories', categoryRoutes);
+
+console.log('=== REGISTERED ROUTES ===');
+const listRoutes = (stack, basePath = '') => {
+  stack.forEach((layer) => {
+    if (layer.route) {
+      const methods = Object.keys(layer.route.methods).map(m => m.toUpperCase()).join(', ');
+      console.log(`${methods} ${basePath}${layer.route.path}`);
+    } else if (layer.name === 'router' && layer.handle.stack) {
+      const match = layer.regexp.toString().match(/^\/\^\\\/([^\\]+)/);
+      const path = match ? `/${match[1]}` : '';
+      listRoutes(layer.handle.stack, basePath + path);
+    }
+  });
+};
+listRoutes(app._router.stack);
+console.log('=========================');
 
 app.use('/uploads', express.static('uploads'));
 

@@ -5,6 +5,7 @@ const { Op } = require('sequelize');
 const { Product, Category, ProductImage, ProductVariant } = require('../models');
 const mediaService = require("../services/mediaService");
 const storeService = require("../services/storeService");
+const serviceClient = require('../utils/serviceClient');
 
 // Récupérer tous les produits (GET /)
 exports.getProducts = catchAsync(async (req, res) => {
@@ -96,104 +97,140 @@ function generateUniqueSlug(name) {
   return `${baseSlug}-${Date.now()}`;
 }
 // In productController.js - createProduct method
-exports.createProduct = async (req, res) => {
+/**
+ * Create product with external validations
+ * POST /
+ */
+exports.createProduct = catchAsync(async (req, res) => {
+  console.log('=== CREATE PRODUCT DEBUG ===');
+  console.log('Request body:', req.body);
+
+  const { store_id, name, price, description, category_id, quantity, status, images } = req.body;
+
+  // Extract merchant_id from body or authenticated user
+  const merchant_id = req.body.merchant_id || req.user?.merchant_id;
+
+  console.log('Extracted merchant_id:', merchant_id);
+  console.log('Extracted store_id:', store_id);
+
+  // Validation: Required fields
+  if (!merchant_id || !store_id) {
+    throw new ApiError(400, 'merchant_id and store_id are required');
+  }
+
+  if (!name || !category_id) {
+    throw new ApiError(400, "Fields 'name' and 'category_id' are required");
+  }
+
+  // Verify store exists via STORE-SERVICE
   try {
-    console.log("=== CREATE PRODUCT DEBUG ===");
-    console.log("Request body:", req.body);
-    console.log("Files:", req.files?.length || 0);
+    await serviceClient.getStore(store_id, req.headers.authorization);
+  } catch (err) {
+    console.error('❌ Store validation failed:', err.message);
+    throw new ApiError(400, 'Invalid or non-existent store');
+  }
+  
 
-    const merchant_id = req.body.merchant_id || req.user?.merchant_id;
-    const store_id = req.body.store_id || req.user?.store_id;
+  // Prepare product data
+  const productData = {
+    name: name.trim(),
+    price: parseFloat(price) || 0,
+    description: description?.trim(),
+    category_id,
+    store_id,
+    merchant_id,
+    quantity: parseInt(quantity) || 0,
+    status: status || 'active',
+    slug: generateUniqueSlug(name),
+    visibility: req.body.visibility?.trim() || 'public'
+  };
 
-    console.log("Extracted merchant_id:", merchant_id);
-    console.log("Extracted store_id:", store_id);
+  console.log('Product data to create:', productData);
 
-    if (!merchant_id || !store_id) {
-      return res.status(400).json({
-        success: false,
-        message: "merchant_id and store_id are required"
-      });
-    }
+  // Create product using service layer
+  const product = await productService.createProduct(productData);
 
-    // TEMPORARY: Skip validation for testing
-    // Comment this out after fixing the issue
-    /*
-    try {
-      await storeService.validateStore(store_id, merchant_id);
-    } catch (error) {
-      return res.status(403).json({
-        success: false,
-        message: error.message
-      });
-    }
-    */
-    console.log("⚠️  Skipping store validation for testing");
+  console.log('✅ Product created:', product.id);
 
-    // Check if store is active (also skipped for now)
-    // const isActive = await storeService.isStoreActive(store_id);
+  // Handle image uploads to MEDIA-SERVICE
+  if (images && images.length > 0) {
+    const uploadedImages = [];
+    const failedImages = [];
 
-    const productData = {
-      name: req.body.name,
-      price: parseFloat(req.body.price) || 0,
-      description: req.body.description,
-      category_id: req.body.category_id,
-      category_name: req.body.category_name,
-      quantity: parseInt(req.body.quantity) || 0,
-      status: req.body.status || 'active',
-      merchant_id: merchant_id,
-      store_id: store_id,
-      visibility: req.body.visibility?.trim() || 'public',
-      slug: await generateUniqueSlug(req.body.name)
-    };
-
-    console.log("Product data to create:", productData);
-
-    if (!productData.name || !productData.category_id) {
-      return res.status(400).json({
-        success: false,
-        message: "Fields 'name' and 'category_id' are required"
-      });
-    }
-
-    // Create product
-    const product = await productService.createProduct(productData, req.files);
-    console.log("Product created:", product.id);
-
-    // Upload images to Media Service
-    if (req.files && req.files.length > 0) {
+    for (const [index, image] of images.entries()) {
       try {
-        console.log("Uploading images to Media Service...");
-        const mediaResult = await mediaService.uploadProductImages(
-          req.files,
-          {
-            merchant_id,
-            store_id,
-            product_id: product.id,
-            product_name: product.name
-          }
-        );
-        product.image_ids = mediaResult.media_ids;
-        console.log("Images uploaded:", mediaResult.media_ids);
+        const mediaResult = await serviceClient.uploadMedia(image, {
+          entity_type: 'product',
+          entity_id: product.id,
+          merchant_id,
+          store_id
+        });
+        uploadedImages.push(mediaResult);
+        console.log(`✅ Image ${index + 1} uploaded:`, mediaResult.id || mediaResult.media_id);
       } catch (mediaError) {
-        console.error('❌ Media upload failed:', mediaError.message);
-        product.image_upload_error = mediaError.message;
+        console.error(`❌ Failed to upload image ${index + 1}:`, mediaError.message);
+        failedImages.push({ index, error: mediaError.message });
       }
     }
 
-    res.status(201).json({
-      success: true,
-      message: 'Product created successfully',
-      data: product
-    });
-  } catch (error) {
-    console.error("❌ Create product error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to create product",
-      error: error.message
-    });
+    // Attach upload results to response
+    product.setDataValue('uploaded_images', uploadedImages);
+    if (failedImages.length > 0) {
+      product.setDataValue('failed_uploads', failedImages);
+    }
   }
-};
+
+  res.status(201).json({
+    success: true,
+    message: 'Product created successfully',
+    data: product
+  });
+});
+
+/**
+ * Get product with details from external services
+ * GET /:id/details
+ */
+exports.getProductWithDetails = catchAsync(async (req, res) => {
+  const { productId } = req.params;
+
+  // 1. Get local product
+  const product = await Product.findByPk(productId);
+  if (!product) {
+    throw new ApiError(404, 'Product not found');
+  }
+
+  // 2. Get store info from STORE-SERVICE
+  let storeData = null;
+  try {
+    storeData = await serviceClient.getStore(
+      product.store_id,
+      req.headers.authorization
+    );
+  } catch (err) {
+    console.warn('⚠️  Store service unavailable:', err.message);
+  }
+
+  // 3. Get images from MEDIA-SERVICE
+  let mediaData = [];
+  try {
+    mediaData = await serviceClient.getMedia('product', productId);
+  } catch (err) {
+    console.warn('⚠️  Media service unavailable:', err.message);
+  }
+
+  // 4. Combine and return data
+  res.status(200).json({
+    success: true,
+    data: {
+      ...product.toJSON(),
+      store: storeData,
+      media: mediaData
+    }
+  });
+});
+
+
 exports.updateProduct = catchAsync(async (req, res) => {
   const product = await productService.updateProduct(
     req.params.id,
@@ -222,6 +259,7 @@ exports.deleteProduct = catchAsync(async (req, res) => {
     data: result,
   });
 });
+
 exports.getLimits = catchAsync(async (req, res) => {
   const limits = await productService.checkProductLimit(req.user.merchant_id);
   res.status(200).json({ success: true, data: limits });

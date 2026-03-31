@@ -1,24 +1,48 @@
 const jwt = require('jsonwebtoken');
 
-exports.authenticate = (req, res, next) => {
-    // 1. Récupérer le token dans le header Authorization
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1]; // Format: "Bearer TOKEN"
+const authenticate = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Token manquant' });
+  }
 
-    if (!token) {
-        return res.status(401).json({ message: "Token manquant" });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Token invalide' });
+  }
+};
+
+// Middleware pour autoriser les appels internes entre services
+const verifyInternalOrAuth = (req, res, next) => {
+  const isInternal = req.headers['x-internal-service'] === 'true';
+  const token = req.headers.authorization?.split(' ')[1];
+
+  if (isInternal) {
+    // Vérifier un secret interne si nécessaire
+    const internalSecret = req.headers['x-internal-secret'];
+    if (internalSecret === process.env.INTERNAL_SECRET) {
+      return next();
     }
+  }
 
+  if (token) {
     try {
-        // 2. Vérifier le token avec ta clé secrète
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        
-        // 3. CRUCIAL : Attacher les infos au req.user
-        // Vérifie si ton token contient 'id' ou 'merchant_id'
-        req.user = decoded; 
-        
-        next();
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = decoded;
+      return next();
     } catch (error) {
-        return res.status(401).json({ message: "Token invalide ou expiré" });
+      return res.status(401).json({ error: 'Token invalide' });
     }
+  }
+
+  res.status(401).json({ error: 'Authentification requise' });
+};
+
+module.exports = { 
+  authenticate,        // ✅ Now exported as authenticate
+  verifyInternalOrAuth 
 };
