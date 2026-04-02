@@ -5,12 +5,12 @@ const compression = require('compression');
 const morgan = require('morgan');
 const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = require('../swagger/swagger.json');
-
 const categoryRoutes = require('./routes/categoryRoutes');
 const productRoutes = require('./routes/productRoutes');
 const variantRoutes = require('./routes/variantRoutes');
 const { errorHandler } = require('./utils/apiError');
 const merchantRoutes = require('./routes/merchantRoutes');
+const { authenticate } = require('./middleware/auth');
 
 const multer = require('multer');
 const path = require('path');
@@ -55,6 +55,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
     swaggerOptions: {
         url: '/api-docs/swagger.json',
         validatorUrl: null,
+        persistAuthorization: true,
         tryItOutEnabled: true
     },
     customCss: '.swagger-ui .topbar { display: none }',
@@ -74,13 +75,13 @@ app.get('/health', (req, res) => {
 });
 
 // Routes
-app.use('/api/v1/variants', variantRoutes);
-app.use('/api/v1/products', productRoutes);
+app.use('/api/v1/variants', authenticate, variantRoutes);
+app.use('/api/v1/products', authenticate, productRoutes);
 
 
-app.use('/api/v1/merchants', merchantRoutes);
+app.use('/api/v1/merchants', authenticate, merchantRoutes);
 
-app.use('/api/v1/categories', categoryRoutes);
+app.use('/api/v1/categories', authenticate, categoryRoutes);
 
 console.log('=== REGISTERED ROUTES ===');
 const listRoutes = (stack, basePath = '') => {
@@ -149,7 +150,7 @@ const uploadSchema = Joi.object({
 });
 
 // POST /api/v1/products/:id/images
-app.post('/api/v1/products/:id/images', 
+app.post('/api/v1/products/:id/images', authenticate,
   upload.single('image'), // Handle single file upload
   async (req, res) => {
     try {

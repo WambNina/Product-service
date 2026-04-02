@@ -6,7 +6,7 @@ const axios = require('axios');
 
 const SERVICES = {
   STORE: process.env.STORE_SERVICE_URL || 'http://localhost:3000',
-  MEDIA: process.env.MEDIA_SERVICE_URL || 'http://localhost:4002',
+  MEDIA: process.env.MEDIA_SERVICE_URL || 'http://localhost:3001',
   AUTH: process.env.AUTH_SERVICE_URL || 'http://localhost:3001'
 };
 

@@ -5,7 +5,7 @@ class ServiceClient {
     this.services = {
       store: process.env.STORE_SERVICE_URL || 'http://localhost:3000',
       product: process.env.PRODUCT_SERVICE_URL || 'http://localhost:3002',
-      media: process.env.MEDIA_SERVICE_URL || 'http://localhost:4002'
+      media: process.env.MEDIA_SERVICE_URL || 'http://localhost:3001'
     };
   }
 

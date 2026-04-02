@@ -1,48 +1,100 @@
 const jwt = require('jsonwebtoken');
+const ApiError = require('../utils/apiError');
 
+/**
+ * Verify JWT token middleware
+ */
 const authenticate = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
+  // Get token from header
+  const authHeader = req.headers.authorization;
   
-  if (!token) {
-    return res.status(401).json({ error: 'Token manquant' });
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      success: false,
+      message: 'Token manquant'
+    });
   }
 
+  const token = authHeader.split(' ')[1];
+
   try {
+    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Token invalide' });
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Token expiré'
+      });
+    }
+    return res.status(401).json({
+      success: false,
+      message: 'Token invalide'
+    });
   }
 };
 
-// Middleware pour autoriser les appels internes entre services
+/**
+ * Optional: Verify internal service token OR JWT
+ * For service-to-service communication
+ */
 const verifyInternalOrAuth = (req, res, next) => {
-  const isInternal = req.headers['x-internal-service'] === 'true';
-  const token = req.headers.authorization?.split(' ')[1];
+  const internalToken = req.headers['x-internal-token'];
+  const authHeader = req.headers.authorization;
 
-  if (isInternal) {
-    // Vérifier un secret interne si nécessaire
-    const internalSecret = req.headers['x-internal-secret'];
-    if (internalSecret === process.env.INTERNAL_SECRET) {
-      return next();
-    }
+  // Check internal token first
+  if (internalToken === process.env.SERVICE_INTERNAL_TOKEN) {
+    req.isInternal = true;
+    return next();
   }
 
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = decoded;
-      return next();
-    } catch (error) {
-      return res.status(401).json({ error: 'Token invalide' });
-    }
+  // If no internal token, require JWT
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      success: false,
+      message: 'Token manquant'
+    });
   }
 
-  res.status(401).json({ error: 'Authentification requise' });
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: 'Token invalide'
+    });
+  }
 };
 
-module.exports = { 
-  authenticate,        // ✅ Now exported as authenticate
-  verifyInternalOrAuth 
+/**
+ * Optional: Role-based authorization
+ */
+const authorize = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Non authentifié'
+      });
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Accès refusé - Permissions insuffisantes'
+      });
+    }
+    next();
+  };
+};
+
+module.exports = {
+  authenticate,
+  verifyInternalOrAuth,
+  authorize
 };
