@@ -11,7 +11,7 @@ const variantRoutes = require('./routes/variantRoutes');
 const { errorHandler } = require('./utils/apiError');
 const merchantRoutes = require('./routes/merchantRoutes');
 const { authenticate } = require('./middleware/auth');
-
+const storeRoutes = require('./routes/storeRoutes');
 const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
@@ -100,6 +100,8 @@ listRoutes(app._router.stack);
 console.log('=========================');
 
 app.use('/uploads', express.static('uploads'));
+
+app.use('/api/v1/stores', authenticate, storeRoutes);
 
 // 404
 app.use((req, res) => {

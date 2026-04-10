@@ -9,7 +9,8 @@ const Product = sequelize.define('Product', {
   },
   merchant_id: {
     type: DataTypes.CHAR(36),
-    allowNull: false
+    allowNull: false,
+    defaultValue: DataTypes.UUIDV4
   },
   store_id: {
     type: DataTypes.CHAR(36),
@@ -58,6 +59,13 @@ const Product = sequelize.define('Product', {
     type: DataTypes.INTEGER,
     defaultValue: 0
   },
+   brand: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    validate: {
+      len: [2, 100]
+    }
+  },
   // ❌ REMOVED: images field (use product_images table instead)
   weight: {
     type: DataTypes.DECIMAL(8, 2),
@@ -98,7 +106,19 @@ visibility: {
   },
   tags: {
     type: DataTypes.JSON,
-    allowNull: true
+    allowNull: true,
+    defaultValue: [],
+    // Validate it's an array of strings
+    validate: {
+      isValidTags(value) {
+        if (value && !Array.isArray(value)) {
+          throw new Error('Tags must be an array');
+        }
+        if (value && value.some(tag => typeof tag !== 'string')) {
+          throw new Error('All tags must be strings');
+        }
+      }
+    }
   },
   seo_title: {
     type: DataTypes.STRING(70),

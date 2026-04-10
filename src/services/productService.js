@@ -1125,8 +1125,8 @@ class ProductService {
     return {
       product_id: productId,
       reviews: [], // Populate from your Review model
-      average_rating: product.average_rating || 0,
-      total_reviews: product.total_reviews || 0,
+      average_rating: parseFloat(product.rating_average) || 0,
+      total_reviews: product.rating_count || 0,
       rating_breakdown: {
         5: 0, 4: 0, 3: 0, 2: 0, 1: 0
       }
@@ -1135,8 +1135,9 @@ class ProductService {
 
   // Get product rating summary
   async getProductRating(productId) {
+      console.log('DEBUG: Using updated code with rating_average');
     const product = await Product.findByPk(productId, {
-      attributes: ['id', 'name', 'average_rating', 'total_reviews']
+      attributes: ['id', 'name', 'rating_average', 'rating_count']
     });
     
     if (!product) {
@@ -1152,8 +1153,8 @@ class ProductService {
 
     return {
       product_id: productId,
-      average_rating: parseFloat(product.average_rating) || 0,
-      total_reviews: product.total_reviews || 0,
+      average_rating: parseFloat(product.rating_average) || 0,
+      total_reviews: product.rating_count || 0,
       rating_distribution: {
         5: 0, 4: 0, 3: 0, 2: 0, 1: 0
       }

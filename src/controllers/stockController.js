@@ -40,6 +40,12 @@ class StockController {
    * POST /api/v1/products/:id/stock/increase
    */
   increaseStock = catchAsync(async (req, res) => {
+    console.log('=== DEBUG ===');
+    console.log('req.params:', req.params);
+    console.log('req.body:', req.body);
+    console.log('req.user:', req.user);
+    console.log('=============');
+
     const { id } = req.params;
     const { quantity, variantId, reason, referenceId } = req.body;
     const userId = req.user?.id || req.user?.merchant_id || null;
@@ -90,8 +96,8 @@ class StockController {
 
     const history = await stockService.getStockHistory(id, {
       variantId: variantId || null,
-      limit: limit || 50,
-      offset: offset || 0
+      limit: parseInt(limit) || 50,
+      offset: parseInt(offset) || 0
     });
 
     res.status(200).json({

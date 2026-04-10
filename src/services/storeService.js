@@ -1,12 +1,14 @@
 const serviceClient = require("../utils/serviceClient");
 
 class StoreService {
-  async validateStore(store_id, merchant_id) {
+  async validateStore(store_id, merchant_id, authToken) { // Add authToken parameter
     try {
       const response = await serviceClient.call(
         "store",
         "GET",
-        `/api/v1/stores/${store_id}`
+        `/api/v1/stores/${store_id}`,
+        null, // body
+        { Authorization: authToken } // Pass headers
       );
 
       const store = response.data;

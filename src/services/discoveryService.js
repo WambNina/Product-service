@@ -55,7 +55,7 @@ class DiscoveryService {
 
   async getRating(productId) {
     const product = await Product.findByPk(productId, {
-      attributes: ['id', 'name', 'rating', 'review_count']
+      attributes: ['id', 'name', 'rating_average', 'rating_count']
     });
 
     if (!product) {
@@ -64,12 +64,9 @@ class DiscoveryService {
 
     return {
       product_id: productId,
-      average_rating: product.rating || 0,
-      total_reviews: product.review_count || 0,
-      breakdown: {
-        // À calculer selon vos données réelles
-        5: 0, 4: 0, 3: 0, 2: 0, 1: 0
-      }
+      average_rating:parseFloat(product.rating_average) || 0,
+      total_reviews: product.rating_count || 0,
+      rating_distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
     };
   }
 

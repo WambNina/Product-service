@@ -7,6 +7,14 @@ const StockMovement = sequelize.define('StockMovement', {
     autoIncrement: true,
     primaryKey: true
   },
+  stock_id: {  // ✅ Add this if you want the relationship
+    type: DataTypes.INTEGER,
+    allowNull: true,  // or false if required
+    references: {
+      model: 'product_stocks',
+      key: 'id'
+    }
+  },
   product_id: {
     type: DataTypes.CHAR(36),
     allowNull: false,

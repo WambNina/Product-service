@@ -2,10 +2,38 @@ const jwt = require('jsonwebtoken');
 const ApiError = require('../utils/apiError');
 
 /**
- * Verify JWT token middleware
+ * Verify JWT token middleware with public route support
  */
 const authenticate = (req, res, next) => {
-  // Get token from header
+  // Use originalUrl which contains the full URL path
+  const fullPath = req.originalUrl.split('?')[0]; // Remove query params
+  const method = req.method;
+
+  const publicPaths = [
+    { method: 'GET', pattern: /^\/api\/v1\/products$/ },
+    { method: 'GET', pattern: /^\/api\/v1\/products\/search/ },
+    { method: 'GET', pattern: /^\/api\/v1\/products\/filter/ },
+    { method: 'GET', pattern: /^\/api\/v1\/products\/featured/ },
+    { method: 'GET', pattern: /^\/api\/v1\/products\/[^/]+$/ },
+    { method: 'GET', pattern: /^\/api\/v1\/products\/[^/]+\/reviews/ },
+    { method: 'GET', pattern: /^\/api\/v1\/products\/[^/]+\/rating/ },
+    { method: 'GET', pattern: /^\/api\/v1\/products\/[^/]+\/related/ },
+    { method: 'GET', pattern: /^\/api\/v1\/products\/[^/]+\/stock/ },
+    { method: 'POST', pattern: /^\/api\/v1\/products\/webhook\/whatsapp/ },
+  ];
+
+  const isPublic = publicPaths.some(route => {
+    if (route.method !== method) return false;
+    return route.pattern.test(fullPath);
+  });
+
+  console.log(`[Auth Debug] ${method} ${fullPath} - isPublic: ${isPublic}`);
+
+  if (isPublic) {
+    return next();
+  }
+
+  // 🔒 PROTECTED ROUTE - Require authentication
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

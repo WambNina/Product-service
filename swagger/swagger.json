@@ -51,14 +51,8 @@
     "/api/v1/products": {
       "get": {
         "summary": "Get all products",
-        "tags": [
-          "Products"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
+        "tags": ["Products"],
+        "security": [],
         "parameters": [
           {
             "name": "merchant_id",
@@ -72,6 +66,23 @@
             "in": "query",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "brand",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           },
           {
@@ -129,9 +140,7 @@
       },
       "post": {
         "summary": "Create product",
-        "tags": [
-          "Products"
-        ],
+        "tags": ["Products"],
         "security": [
           {
             "bearerAuth": []
@@ -143,14 +152,24 @@
             "multipart/form-data": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "name",
-                  "price"
-                ],
+                "required": ["name", "price"],
                 "properties": {
                   "name": {
                     "type": "string",
                     "example": "Television"
+                  },
+                  "brand": {
+                    "type": "string",
+                    "description": "Product brand name",
+                    "example": "Samsung"
+                  },
+                  "tags": {
+                    "type": "array",
+                    "description": "Product tags for filtering and search",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": ["electronics", "smart-tv", "4k"]
                   },
                   "price": {
                     "type": "number",
@@ -204,10 +223,7 @@
     "/api/v1/products/search": {
       "get": {
         "summary": "Search products",
-        "tags": [
-          "Products",
-          "Search"
-        ],
+        "tags": ["Products", "Search"],
         "description": "Full-text search on products with relevance scoring",
         "parameters": [
           {
@@ -247,11 +263,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": [
-                "active",
-                "draft",
-                "archived"
-              ],
+              "enum": ["active", "draft", "archived"],
               "default": "active"
             }
           },
@@ -354,10 +366,7 @@
     "/api/v1/products/filter": {
       "get": {
         "summary": "Filter products",
-        "tags": [
-          "Products",
-          "Search"
-        ],
+        "tags": ["Products", "Search"],
         "description": "Advanced filtering with multiple criteria",
         "parameters": [
           {
@@ -449,10 +458,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": [
-                "ASC",
-                "DESC"
-              ],
+              "enum": ["ASC", "DESC"],
               "default": "DESC"
             }
           },
@@ -530,10 +536,7 @@
     "/api/v1/products/featured": {
       "get": {
         "summary": "Get featured products",
-        "tags": [
-          "Products",
-          "Discovery"
-        ],
+        "tags": ["Products", "Discovery"],
         "description": "Get featured/promoted products",
         "parameters": [
           {
@@ -582,9 +585,7 @@
     "/api/v1/products/{id}": {
       "get": {
         "summary": "Get product by ID",
-        "tags": [
-          "Products"
-        ],
+        "tags": ["Products"],
         "security": [
           {
             "bearerAuth": []
@@ -609,9 +610,7 @@
       },
       "put": {
         "summary": "Update a product",
-        "tags": [
-          "Products"
-        ],
+        "tags": ["Products"],
         "security": [
           {
             "bearerAuth": []
@@ -658,9 +657,7 @@
       },
       "delete": {
         "summary": "Delete a Product",
-        "tags": [
-          "Products"
-        ],
+        "tags": ["Products"],
         "security": [
           {
             "bearerAuth": []
@@ -690,9 +687,7 @@
     "/api/v1/products/{id}/variants": {
       "get": {
         "summary": "Get product variants with pricing details",
-        "tags": [
-          "Variants"
-        ],
+        "tags": ["Variants"],
         "security": [
           {
             "bearerAuth": []
@@ -742,9 +737,7 @@
       },
       "post": {
         "summary": "Add single variant with modular pricing",
-        "tags": [
-          "Variants"
-        ],
+        "tags": ["Variants"],
         "security": [
           {
             "bearerAuth": []
@@ -805,9 +798,7 @@
     },
     "/api/v1/products/{id}/variants/batch": {
       "post": {
-        "tags": [
-          "Variants"
-        ],
+        "tags": ["Variants"],
         "summary": "Upload image and create multiple variants with modular pricing",
         "description": "Upload product image and create color/size/capacity/weight variants in batch. Supports two pricing modes: capacity-based (electronics) or modifier-based (clothing).",
         "operationId": "createBatchVariants",
@@ -834,9 +825,7 @@
             "multipart/form-data": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "image"
-                ],
+                "required": ["image"],
                 "properties": {
                   "image": {
                     "type": "string",
@@ -870,10 +859,7 @@
                   },
                   "pricingStrategy": {
                     "type": "string",
-                    "enum": [
-                      "capacity-based",
-                      "modifier-based"
-                    ],
+                    "enum": ["capacity-based", "modifier-based"],
                     "default": "modifier-based",
                     "description": "capacity-based: electronics (iPhone), modifier-based: clothing"
                   },
@@ -955,10 +941,7 @@
     },
     "/api/v1/products/{id}/calculate-price": {
       "post": {
-        "tags": [
-          "Pricing",
-          "Variants"
-        ],
+        "tags": ["Pricing", "Variants"],
         "summary": "Calculate price for selected variant attributes",
         "description": "Preview final price before purchase based on selected color, size, capacity with modular pricing",
         "operationId": "calculateVariantPrice",
@@ -985,9 +968,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "attributes"
-                ],
+                "required": ["attributes"],
                 "properties": {
                   "attributes": {
                     "type": "object",
@@ -1105,11 +1086,7 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "color",
-                                      "size",
-                                      "weight"
-                                    ]
+                                    "enum": ["color", "size", "weight"]
                                   },
                                   "value": {
                                     "type": "string"
@@ -1159,10 +1136,7 @@
     },
     "/api/v1/products/{id}/price-matrix": {
       "get": {
-        "tags": [
-          "Pricing",
-          "Variants"
-        ],
+        "tags": ["Pricing", "Variants"],
         "summary": "Get all price combinations matrix",
         "description": "Returns all possible variant combinations with their calculated prices. Useful for displaying a comparison grid.",
         "operationId": "getPriceMatrix",
@@ -1276,9 +1250,7 @@
     "/api/v1/variants/{variantId}": {
       "get": {
         "summary": "Get variant by ID",
-        "tags": [
-          "Variants"
-        ],
+        "tags": ["Variants"],
         "security": [
           {
             "bearerAuth": []
@@ -1322,9 +1294,7 @@
       },
       "put": {
         "summary": "Update variant (including price modifiers)",
-        "tags": [
-          "Variants"
-        ],
+        "tags": ["Variants"],
         "security": [
           {
             "bearerAuth": []
@@ -1394,9 +1364,7 @@
       },
       "delete": {
         "summary": "Delete variant",
-        "tags": [
-          "Variants"
-        ],
+        "tags": ["Variants"],
         "security": [
           {
             "bearerAuth": []
@@ -1444,10 +1412,7 @@
     },
     "/api/v1/variants/{variantId}/price": {
       "put": {
-        "tags": [
-          "Pricing",
-          "Variants"
-        ],
+        "tags": ["Pricing", "Variants"],
         "summary": "Update variant specific price (override)",
         "description": "Override the calculated price for a specific variant (promotion, clearance, etc.)",
         "operationId": "updateVariantPrice",
@@ -1473,9 +1438,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "price"
-                ],
+                "required": ["price"],
                 "properties": {
                   "price": {
                     "type": "number",
@@ -1483,12 +1446,7 @@
                   },
                   "reason": {
                     "type": "string",
-                    "enum": [
-                      "promotion",
-                      "clearance",
-                      "custom",
-                      "revert"
-                    ],
+                    "enum": ["promotion", "clearance", "custom", "revert"],
                     "description": "Reason for price override"
                   }
                 }
@@ -1544,10 +1502,7 @@
     "/api/v1/products/{id}/reviews": {
       "get": {
         "summary": "Get product reviews",
-        "tags": [
-          "Reviews",
-          "Discovery"
-        ],
+        "tags": ["Reviews", "Discovery"],
         "parameters": [
           {
             "name": "id",
@@ -1662,10 +1617,7 @@
     "/api/v1/products/{id}/rating": {
       "get": {
         "summary": "Get product rating summary",
-        "tags": [
-          "Reviews",
-          "Discovery"
-        ],
+        "tags": ["Reviews", "Discovery"],
         "parameters": [
           {
             "name": "id",
@@ -1737,9 +1689,7 @@
     "/api/v1/products/{id}/related": {
       "get": {
         "summary": "Get related products",
-        "tags": [
-          "Discovery"
-        ],
+        "tags": ["Discovery"],
         "description": "Get similar products based on category and tags",
         "parameters": [
           {
@@ -1790,9 +1740,7 @@
     "/api/v1/categories": {
       "get": {
         "summary": "Category List",
-        "tags": [
-          "Categories"
-        ],
+        "tags": ["Categories"],
         "responses": {
           "200": {
             "description": "Succès"
@@ -1801,9 +1749,7 @@
       },
       "post": {
         "summary": "Create a Category",
-        "tags": [
-          "Categories"
-        ],
+        "tags": ["Categories"],
         "security": [
           {
             "bearerAuth": []
@@ -1815,9 +1761,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "name"
-                ],
+                "required": ["name"],
                 "properties": {
                   "name": {
                     "type": "string",
@@ -1842,9 +1786,7 @@
     "/api/v1/categories/{id}": {
       "get": {
         "summary": "Detail of a category",
-        "tags": [
-          "Categories"
-        ],
+        "tags": ["Categories"],
         "security": [
           {
             "bearerAuth": []
@@ -1868,9 +1810,7 @@
       },
       "put": {
         "summary": "Modify a category",
-        "tags": [
-          "Categories"
-        ],
+        "tags": ["Categories"],
         "security": [
           {
             "bearerAuth": []
@@ -1900,10 +1840,7 @@
                   },
                   "status": {
                     "type": "string",
-                    "enum": [
-                      "active",
-                      "inactive"
-                    ]
+                    "enum": ["active", "inactive"]
                   }
                 }
               }
@@ -1918,9 +1855,7 @@
       },
       "delete": {
         "summary": "Delete a category",
-        "tags": [
-          "Categories"
-        ],
+        "tags": ["Categories"],
         "security": [
           {
             "bearerAuth": []
@@ -1946,9 +1881,7 @@
     "/api/v1/merchants/{merchantId}/products": {
       "get": {
         "summary": "Get merchant products",
-        "tags": [
-          "Merchants"
-        ],
+        "tags": ["Merchants"],
         "description": "Get all products for a specific merchant",
         "parameters": [
           {
@@ -1981,11 +1914,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": [
-                "active",
-                "draft",
-                "archived"
-              ]
+              "enum": ["active", "draft", "archived"]
             }
           }
         ],
@@ -2032,9 +1961,7 @@
       },
       "post": {
         "summary": "Create product for merchant",
-        "tags": [
-          "Merchants"
-        ],
+        "tags": ["Merchants"],
         "security": [
           {
             "bearerAuth": []
@@ -2058,10 +1985,7 @@
             "multipart/form-data": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "name",
-                  "price"
-                ],
+                "required": ["name", "price"],
                 "properties": {
                   "name": {
                     "type": "string"
@@ -2122,9 +2046,7 @@
     "/api/v1/stores/{storeId}/products": {
       "get": {
         "summary": "Get store products",
-        "tags": [
-          "Stores"
-        ],
+        "tags": ["Stores"],
         "description": "Get all products for a specific store",
         "parameters": [
           {
@@ -2213,9 +2135,7 @@
     },
     "/api/v1/products/{id}/images": {
       "post": {
-        "tags": [
-          "Images"
-        ],
+        "tags": ["Images"],
         "summary": "Upload product Image",
         "security": [
           {
@@ -2251,9 +2171,7 @@
                     "default": false
                   }
                 },
-                "required": [
-                  "images"
-                ]
+                "required": ["images"]
               }
             }
           }
@@ -2268,9 +2186,7 @@
         }
       },
       "get": {
-        "tags": [
-          "Images"
-        ],
+        "tags": ["Images"],
         "summary": "See product images",
         "parameters": [
           {
@@ -2302,9 +2218,7 @@
     },
     "/api/v1/products/{id}/images/{imageId}": {
       "delete": {
-        "tags": [
-          "Images"
-        ],
+        "tags": ["Images"],
         "summary": "Delete an image",
         "security": [
           {
@@ -2344,9 +2258,7 @@
     "/api/v1/products/{id}/stock": {
       "get": {
         "summary": "Get product stock",
-        "tags": [
-          "Stock"
-        ],
+        "tags": ["Stock"],
         "security": [
           {
             "bearerAuth": []
@@ -2426,9 +2338,7 @@
       },
       "put": {
         "summary": "Update stock (absolute value)",
-        "tags": [
-          "Stock"
-        ],
+        "tags": ["Stock"],
         "security": [
           {
             "bearerAuth": []
@@ -2451,9 +2361,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "quantity"
-                ],
+                "required": ["quantity"],
                 "properties": {
                   "quantity": {
                     "type": "integer",
@@ -2481,9 +2389,7 @@
     "/api/v1/products/{id}/stock/increase": {
       "post": {
         "summary": "Increase stock",
-        "tags": [
-          "Stock"
-        ],
+        "tags": ["Stock"],
         "security": [
           {
             "bearerAuth": []
@@ -2506,9 +2412,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "quantity"
-                ],
+                "required": ["quantity"],
                 "properties": {
                   "quantity": {
                     "type": "integer",
@@ -2539,9 +2443,7 @@
     "/api/v1/api/v1/products/{id}/stock/decrease": {
       "post": {
         "summary": "Decrease stock",
-        "tags": [
-          "Stock"
-        ],
+        "tags": ["Stock"],
         "security": [
           {
             "bearerAuth": []
@@ -2564,9 +2466,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "quantity"
-                ],
+                "required": ["quantity"],
                 "properties": {
                   "quantity": {
                     "type": "integer",
@@ -2640,12 +2540,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "draft",
-              "active",
-              "archived",
-              "out_of_stock"
-            ]
+            "enum": ["draft", "active", "archived", "out_of_stock"]
           },
           "category_id": {
             "type": "string"
@@ -2676,12 +2571,7 @@
           },
           "weight_unit": {
             "type": "string",
-            "enum": [
-              "kg",
-              "g",
-              "lb",
-              "oz"
-            ]
+            "enum": ["kg", "g", "lb", "oz"]
           },
           "created_at": {
             "type": "string",
@@ -2727,11 +2617,7 @@
                   },
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "hex",
-                      "text",
-                      "image"
-                    ]
+                    "enum": ["hex", "text", "image"]
                   },
                   "priceImpact": {
                     "type": "number",
@@ -2855,11 +2741,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "active",
-              "inactive",
-              "out_of_stock"
-            ]
+            "enum": ["active", "inactive", "out_of_stock"]
           },
           "created_at": {
             "type": "string",
@@ -2873,9 +2755,7 @@
       },
       "ProductVariantInput": {
         "type": "object",
-        "required": [
-          "sku"
-        ],
+        "required": ["sku"],
         "properties": {
           "sku": {
             "type": "string",
@@ -2899,11 +2779,7 @@
                   },
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "hex",
-                      "text",
-                      "image"
-                    ]
+                    "enum": ["hex", "text", "image"]
                   },
                   "priceImpact": {
                     "type": "number",
@@ -2981,11 +2857,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "active",
-              "inactive",
-              "out_of_stock"
-            ],
+            "enum": ["active", "inactive", "out_of_stock"],
             "default": "active"
           }
         }
