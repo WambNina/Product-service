@@ -1,6 +1,7 @@
-const { Product, Category, ProductVariant, Sequelize } = require('../models');
+const { Product, Category, ProductVariant, ProductImage } = require('../models');  
 const { Op } = require('sequelize');
-const ApiError = require('../utils/apiError');
+const { sequelize } = require('../config/database');  
+const ApiError = require('../utils/apiError'); 
 
 // Simulation d'un modèle Review (à remplacer par votre vrai modèle)
 const Review = {
@@ -90,11 +91,12 @@ class DiscoveryService {
           // { tags: { [Op.overlap]: product.tags } }
         ]
       },
-      attributes: ['id', 'name', 'slug', 'price', 'images', 'short_description'],
+      attributes: ['id', 'name', 'slug', 'price', 'short_description'],
       include: [
-        { model: Category, as: 'category', attributes: ['id', 'name'] }
+        { model: Category, as: 'category', attributes: ['id', 'name'] },
+        {model: ProductImage, as: 'images', attributes: ['id', 'url', 'filename']}
       ],
-      order: Sequelize.literal('RAND()'), // MySQL random
+      order: sequelize.literal('RAND()'), // MySQL random
       limit
     });
 
