@@ -705,11 +705,13 @@ async function createElectronicVariants({
             id: uuidv4(),
             product_id: productId,
             sku: generateSKU(
-              product.name,
-              capacity.value,
-              color.value,
-              size.value,
-              weight.value,
+              product,
+              {
+                capacity: { value: capacity.value },
+                color: { value: color.value },
+                size: { value: size.value },
+                weight: { value: weight.value },
+              }
             ),
             barcode: null,
             attributes: JSON.stringify({
@@ -828,11 +830,12 @@ async function createStandardVariants({
           id: uuidv4(),
           product_id: productId,
           sku: generateSKU(
-            product.name,
-            null,
-            color.value,
-            size.value,
-            weight.value,
+            product,
+            {
+              color: { value: color.value },
+              size: { value: size.value },
+              weight: { value: weight.value },
+            }
           ),
           barcode: null,
           attributes: JSON.stringify({
@@ -945,18 +948,21 @@ async function createProductImage(
 }
 
 function generateSKU(product, variantAttributes = {}) {
-  const merchantId = product.merchant_id || '00';
-  const productShort = product.id.substring(0, 4).toUpperCase();
-  const timestamp = Date.now().toString(36).toUpperCase(); // Base36 timestamp
-  const random = nanoid(4).toUpperCase(); // 4-char random suffix
+  const merchantId = product?.merchant_id || '00';
+  const productShort = (product?.id || 'XXXX').substring(0, 4).toUpperCase();
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = nanoid(4).toUpperCase();
 
-  // Build attribute suffix for readability (optional)
+  // Build attribute suffix for readability
   const attrParts = [];
   if (variantAttributes.color?.value) {
     attrParts.push(cleanString(variantAttributes.color.value, 2));
   }
   if (variantAttributes.size?.value) {
     attrParts.push(cleanString(variantAttributes.size.value, 2));
+  }
+  if (variantAttributes.capacity?.value) {
+    attrParts.push(cleanString(variantAttributes.capacity.value, 2));
   }
 
   const attrSuffix = attrParts.length > 0 ? `-${attrParts.join('')}` : '';

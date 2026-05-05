@@ -130,6 +130,16 @@ class VariantService {
     return await ProductVariant.create(createData);
   }
 
+  /**
+ * Get all variants for a product
+ */
+  async getVariantsByProductId(productId) {
+    return await ProductVariant.findAll({
+      where: { product_id: productId },
+      order: [['position', 'ASC'], ['created_at', 'DESC']]
+    });
+  }
+
   async updateVariant(variantId, variantData) {
     const variant = await ProductVariant.findByPk(variantId);
     if (!variant) {
@@ -181,6 +191,7 @@ class VariantService {
     const product = await Product.findByPk(productId);
     return product; // Retourne null si pas trouvé, le controller gère l'erreur
   }
+
 
   /**
    * 🆕 NOUVEAU: Find variant by attributes (pour calculatePrice)
@@ -287,20 +298,11 @@ class VariantService {
     let variantCount = 0;
 
     // 🆕 Mode électronique: capacity définit le prix de base
-    if (
-      pricingStrategy === "capacity-based" &&
-      capacities &&
-      capacities.length > 0
-    ) {
+    if (pricingStrategy === "capacity-based" && capacities && capacities.length > 0) {
       for (const capacity of capacities) {
-        for (const color of colors && colors.length > 0
-          ? colors
-          : [{ value: null, priceImpact: 0 }]) {
-          for (const size of sizes && sizes.length > 0
-            ? sizes
-            : [{ value: null, priceImpact: 0 }]) {
-            const basePriceValue =
-              parseFloat(capacity.basePrice) || parseFloat(product.price) || 0;
+        for (const color of colors && colors.length > 0 ? colors : [{ value: null, priceImpact: 0 }]) {
+          for (const size of sizes && sizes.length > 0 ? sizes : [{ value: null, priceImpact: 0 }]) {
+            const basePriceValue = parseFloat(capacity.basePrice) || parseFloat(product.price) || 0;
             const colorImpact = parseFloat(color.priceImpact) || 0;
             const sizeImpact = parseFloat(size.priceImpact) || 0;
             const finalPrice = basePriceValue + colorImpact + sizeImpact;
@@ -308,11 +310,11 @@ class VariantService {
             const variant = {
               id: uuidv4(),
               product_id: productId,
-              sku: generateSKU(product, {
-                capacity: capacity,
-                color: color,
-                size: size,
-                weight: weight,
+              sku: this.generateSKU(product, {
+                capacity: { value: capacity.value },
+                color: { value: color.value },
+                size: { value: size.value },
+                weight: { value: weight.value }
               }),
               barcode: null,
               attributes: JSON.stringify({

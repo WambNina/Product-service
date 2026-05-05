@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS products (
     compare_at_price DECIMAL(10, 2),
     cost_price DECIMAL(10, 2),
     quantity INT DEFAULT 0,
-    imgages VARCHAR(500),
+    images VARCHAR(500),
     weight DECIMAL(8, 2),
     weight_unit ENUM('kg', 'g', 'lb', 'oz') DEFAULT 'kg',
     status ENUM('draft', 'active', 'archived', 'out_of_stock', 'payment_expired') DEFAULT 'draft',

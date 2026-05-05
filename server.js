@@ -20,10 +20,10 @@ const startServer = async () => {
     }
 
     initCronJobs();
-    app.listen(3002, '0.0.0.0', () => {
-      console.log("Server running on port 3002");
-      console.log(`📚 Swagger Docs: http://localhost:${PORT}/api-docs`);
-    });
+    // app.listen(3002, '0.0.0.0', () => {
+    //   console.log("Server running on port 3002");
+    //   console.log(`📚 Swagger Docs: http://localhost:${PORT}/api-docs`);
+    // });
     // app.listen(PORT, () => {
     //   console.log(`🚀 Product Service running on port ${PORT}`);
     //   console.log(`📚 Swagger Docs: http://localhost:${PORT}/api-docs`);

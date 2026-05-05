@@ -24,14 +24,6 @@ const Category = sequelize.define('Category', {
   status: {
     type: DataTypes.ENUM('active', 'inactive'),
     defaultValue: 'active'
-  },
-  created_at: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW
-  },
-  updated_at: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW
   }
 }, {
   tableName: 'categories',

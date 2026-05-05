@@ -185,6 +185,7 @@ async function generateUniqueSlugWithNumber(name, Product) {
 exports.createProduct = catchAsync(async (req, res) => {
   console.log('=== CREATE PRODUCT DEBUG ===');
   console.log('Request body:', req.body);
+  console.log('Request files:', req.files); // Check if multer parsed files
 
   const { 
     store_id, 
@@ -196,8 +197,7 @@ exports.createProduct = catchAsync(async (req, res) => {
     brand,        
     tags,         
     quantity, 
-    status, 
-    images 
+    status
   } = req.body;
 
   // Extract merchant_id from body or authenticated user
@@ -223,13 +223,11 @@ exports.createProduct = catchAsync(async (req, res) => {
 
   // If category_id is invalid/empty but category_name is provided
   if ((!finalCategoryId || finalCategoryId === 'string' || !isValidUUID(finalCategoryId)) && category_name) {
-    // Try to find existing category by name
     let category = await Category.findOne({ 
       where: { name: category_name } 
     });
     
     if (!category) {
-      // Create new category if not exists
       const { v4: uuidv4 } = require('uuid');
       category = await Category.create({
         id: uuidv4(),
@@ -245,7 +243,6 @@ exports.createProduct = catchAsync(async (req, res) => {
     finalCategoryId = category.id;
     categoryData = category;
   } else if (finalCategoryId) {
-    // Validate the provided category_id exists
     const existingCategory = await Category.findByPk(finalCategoryId);
     if (!existingCategory) {
       throw new ApiError(400, 'Invalid or non-existent category_id');
@@ -261,7 +258,6 @@ exports.createProduct = catchAsync(async (req, res) => {
   let processedTags = [];
   if (tags) {
     if (typeof tags === 'string') {
-      // If sent as comma-separated string: "electronics, tv, samsung"
       processedTags = tags.split(',').map(t => t.trim()).filter(t => t);
     } else if (Array.isArray(tags)) {
       processedTags = tags.map(t => String(t).trim()).filter(t => t);
@@ -301,29 +297,113 @@ exports.createProduct = catchAsync(async (req, res) => {
 
   console.log('✅ Product created:', product.id);
 
-  // Handle image uploads to MEDIA-SERVICE
-  if (images && images.length > 0) {
+  // ============================================================
+  // FIXED IMAGE HANDLING - Supports multiple input formats
+  // ============================================================
+  
+  // Collect images from all possible sources
+  let imagesToProcess = [];
+  
+  // 1. Check for multer-uploaded files (multipart/form-data with @file)
+  if (req.files && req.files.length > 0) {
+    // Multer puts files in req.files array
+    imagesToProcess = req.files.map(file => ({
+      buffer: file.buffer,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      source: 'multer'
+    }));
+  } 
+  // 2. Check for single file upload (multer single())
+  else if (req.file) {
+    imagesToProcess = [{
+      buffer: req.file.buffer,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      source: 'multer'
+    }];
+  }
+  // 3. Check for images in req.body (JSON array or string)
+  else if (req.body.images) {
+    const rawImages = req.body.images;
+    
+    if (Array.isArray(rawImages)) {
+      imagesToProcess = rawImages;
+    } else if (typeof rawImages === 'string') {
+      try {
+        // Try parsing as JSON array
+        const parsed = JSON.parse(rawImages);
+        imagesToProcess = Array.isArray(parsed) ? parsed : [parsed];
+      } catch (e) {
+        // Not JSON, treat as single string value (like your "string" test)
+        // Skip image processing for non-URL strings
+        if (rawImages.startsWith('http')) {
+          imagesToProcess = [rawImages];
+        } else {
+          console.log('⚠️ Skipping invalid image string:', rawImages);
+          imagesToProcess = [];
+        }
+      }
+    }
+  }
+
+  console.log('Images to process:', imagesToProcess.length, imagesToProcess);
+
+  // Process images if any
+  if (imagesToProcess.length > 0) {
     const uploadedImages = [];
     const failedImages = [];
 
-    for (const [index, image] of images.entries()) {
+    for (let index = 0; index < imagesToProcess.length; index++) {
+      const image = imagesToProcess[index];
+      
       try {
-        const mediaResult = await serviceClient.uploadMedia(image, {
-          entity_type: 'product',
-          entity_id: product.id,
-          merchant_id,
-          store_id
-        });
+        let mediaResult;
+        
+        // Handle multer file objects (buffers)
+        if (image.source === 'multer') {
+          mediaResult = await serviceClient.uploadMedia(image.buffer, {
+            entity_type: 'product',
+            entity_id: product.id,
+            merchant_id,
+            store_id,
+            filename: image.originalname,
+            contentType: image.mimetype
+          });
+        } 
+        // Handle URL strings or base64
+        else if (typeof image === 'string') {
+          mediaResult = await serviceClient.uploadMedia(image, {
+            entity_type: 'product',
+            entity_id: product.id,
+            merchant_id,
+            store_id
+          });
+        }
+        // Handle object with buffer/data
+        else if (image.buffer || image.data) {
+          mediaResult = await serviceClient.uploadMedia(image.buffer || image.data, {
+            entity_type: 'product',
+            entity_id: product.id,
+            merchant_id,
+            store_id
+          });
+        }
+        
         uploadedImages.push(mediaResult);
         console.log(`✅ Image ${index + 1} uploaded:`, mediaResult.id || mediaResult.media_id);
       } catch (mediaError) {
         console.error(`❌ Failed to upload image ${index + 1}:`, mediaError.message);
-        failedImages.push({ index, error: mediaError.message });
+        failedImages.push({ index, error: mediaError.message, image: typeof image === 'string' ? image : image.originalname });
       }
     }
 
     // Attach upload results to response
-    product.setDataValue('uploaded_images', uploadedImages);
+    if (uploadedImages.length > 0) {
+      product.setDataValue('uploaded_images', uploadedImages);
+    }
     if (failedImages.length > 0) {
       product.setDataValue('failed_uploads', failedImages);
     }

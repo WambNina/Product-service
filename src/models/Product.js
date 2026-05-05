@@ -9,8 +9,7 @@ const Product = sequelize.define('Product', {
   },
   merchant_id: {
     type: DataTypes.CHAR(36),
-    allowNull: false,
-    defaultValue: DataTypes.UUIDV4
+    allowNull: false
   },
   store_id: {
     type: DataTypes.CHAR(36),
@@ -59,14 +58,13 @@ const Product = sequelize.define('Product', {
     type: DataTypes.INTEGER,
     defaultValue: 0
   },
-   brand: {
+  brand: {
     type: DataTypes.STRING(100),
     allowNull: true,
     validate: {
       len: [2, 100]
     }
   },
-  // ❌ REMOVED: images field (use product_images table instead)
   weight: {
     type: DataTypes.DECIMAL(8, 2),
     allowNull: true
@@ -79,11 +77,10 @@ const Product = sequelize.define('Product', {
     type: DataTypes.ENUM('draft', 'active', 'archived', 'out_of_stock', 'payment_expired'),
     defaultValue: 'draft'
   },
- // In Product model
-visibility: {
-  type: DataTypes.ENUM('public', 'draft', 'hidden'),
-  defaultValue: 'public'  // Database default
-},
+  visibility: {
+    type: DataTypes.ENUM('public', 'draft', 'hidden'),
+    defaultValue: 'public'
+  },
   is_free_tier: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
@@ -108,7 +105,6 @@ visibility: {
     type: DataTypes.JSON,
     allowNull: true,
     defaultValue: [],
-    // Validate it's an array of strings
     validate: {
       isValidTags(value) {
         if (value && !Array.isArray(value)) {
@@ -213,7 +209,6 @@ Product.associate = (models) => {
     as: 'variants'
   });
   
-  // ✅ Now this works because 'images' attribute is removed
   Product.hasMany(models.ProductImage, {
     foreignKey: 'product_id',
     as: 'images'
@@ -245,38 +240,4 @@ Product.associate = (models) => {
   });
 };
 
-module.exports = (sequelize, DataTypes) => {
-  const Product = sequelize.define('Product', {
-    id: {
-      type: DataTypes.UUID,
-      defaultValue: DataTypes.UUIDV4,
-      primaryKey: true
-    },
-    name: DataTypes.STRING,
-    description: DataTypes.TEXT,
-    type: {
-      type: DataTypes.ENUM('simple', 'configurable', 'variant'),
-      defaultValue: 'simple'
-    },
-    parentId: {
-      type: DataTypes.UUID,
-      allowNull: true,
-      references: { model: 'Products', key: 'id' }
-    },
-    basePrice: DataTypes.DECIMAL(10, 2),
-    sku: DataTypes.STRING,
-    // ... autres champs existants
-  });
-
-  Product.associate = (models) => {
-    Product.belongsTo(Product, { as: 'parent', foreignKey: 'parentId' });
-    Product.hasMany(Product, { as: 'children', foreignKey: 'parentId' });
-    Product.belongsToMany(models.AttributeValue, { 
-      through: 'ProductAttributes',
-      as: 'attributes'
-    });
-  };
-
-  return Product;
-};
 module.exports = Product;
