@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS products (
     weight DECIMAL(8, 2),
     weight_unit ENUM('kg', 'g', 'lb', 'oz') DEFAULT 'kg',
     status ENUM('draft', 'active', 'archived', 'out_of_stock', 'payment_expired') DEFAULT 'draft',
-    visibility ENUM('draft', 'visible', 'hidden', 'payment_required') DEFAULT 'public',
+    visibility ENUM('draft', 'visible', 'hidden', 'payment_required','public') DEFAULT 'public',
     is_free_tier BOOLEAN DEFAULT TRUE,
     payment_plan ENUM('free', 'monthly', 'yearly') DEFAULT 'free',
     payment_expires_at DATETIME,
