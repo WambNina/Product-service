@@ -50,17 +50,37 @@ app.get('/api-docs/swagger.json', (req, res) => {
 });
 
 // Swagger UI
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
-    explorer: true,
-    swaggerOptions: {
-        url: '/api-docs/swagger.json',
-        validatorUrl: null,
-        persistAuthorization: true,
-        tryItOutEnabled: true
-    },
-    customCss: '.swagger-ui .topbar { display: none }',
-    customSiteTitle: 'Product Service API'
-}));
+app.get('/api-docs', (req, res) => {
+    res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Product Service API</title>
+        <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui.css" />
+        <style>.swagger-ui .topbar { display: none }</style>
+    </head>
+    <body>
+        <div id="swagger-ui"></div>
+        <script src="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui-bundle.js"></script>
+        <script src="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui-standalone-preset.js"></script>
+        <script>
+            window.onload = () => {
+                window.ui = SwaggerUIBundle({
+                    url: '/api-docs/swagger.json',
+                    dom_id: '#swagger-ui',
+                    presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+                    layout: 'StandaloneLayout',
+                    validatorUrl: null,
+                    persistAuthorization: true,
+                    tryItOutEnabled: true
+                });
+            };
+        </script>
+    </body>
+    </html>
+    `);
+});
 
 // Static uploads
 app.use('/uploads', express.static('uploads'));
@@ -73,6 +93,8 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+
 
 // Routes
 app.use('/api/v1/variants', authenticate, variantRoutes);
