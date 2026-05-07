@@ -1,3 +1,4 @@
+require('dotenv').config();
 const app = require('./src/app');
 const { sequelize } = require('./src/config/database');
 const initDatabase = require('./src/config/initDatabase');
@@ -21,11 +22,11 @@ const startServer = async () => {
       console.log('✅ MySQL Database connected successfully.');
     }
 
-    // initCronJobs();
-    // app.listen(3002, '0.0.0.0', () => {
-    //   console.log("Server running on port 3002");
-    //   console.log(`📚 Swagger Docs: http://localhost:${PORT}/api-docs`);
-    // });
+    initCronJobs();
+    app.listen(3002, '0.0.0.0', () => {
+     console.log("Server running on port 3002");
+       console.log(`📚 Swagger Docs: http://localhost:${PORT}/api-docs`);
+   });
     // app.listen(PORT, () => {
     //   console.log(`🚀 Product Service running on port ${PORT}`);
     //   console.log(`📚 Swagger Docs: http://localhost:${PORT}/api-docs`);
